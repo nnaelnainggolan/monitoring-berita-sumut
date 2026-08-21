@@ -30,6 +30,8 @@ return [
 
     'n8n' => [
     'ingest_token' => env('NEWS_INGEST_TOKEN'),
+    'trigger_webhook_url' => env('N8N_TRIGGER_WEBHOOK_URL'),
+    'trigger_token' => env('N8N_TRIGGER_TOKEN'),
     ],
     'slack' => [
         'notifications' => [

@@ -42,37 +42,53 @@
     </a>
 </div>
 
-{{-- Trend chart --}}
-<div class="relative rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 p-5 mb-6 overflow-hidden bg-white bg-cover bg-center"
-     style="background-image: linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.88)), url('{{ asset('images/chart-bg.jpg') }}');">
-    <p class="font-display text-base font-semibold text-[var(--navy)] mb-3">Tren Sentimen &middot; 14 Hari Terakhir</p>
-    <canvas id="trendChart" height="75"
-            data-labels='@json($days->map(fn($d) => \Carbon\Carbon::parse($d)->format("d/m")))'
-            data-datasets='@json($chartDatasets)'></canvas>
+{{-- Trend chart & Perbandingan mingguan (berdampingan) --}}
+<div class="grid md:grid-cols-2 gap-5 mb-6">
+    <div class="relative rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 p-5 overflow-hidden bg-white">
+        <p class="font-display text-sm font-semibold text-[var(--navy)] mb-3">Tren Sentimen &middot; 14 Hari Terakhir</p>
+        <canvas id="trendChart" height="140"
+                data-labels='@json($days->map(fn($d) => \Carbon\Carbon::parse($d)->format("d/m")))'
+                data-datasets='@json($chartDatasets)'></canvas>
+    </div>
+
+    <div class="relative rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 p-5 overflow-hidden bg-white">
+        <p class="font-display text-sm font-semibold text-[var(--navy)] mb-3">Minggu Ini vs Minggu Lalu</p>
+        <canvas id="weeklyChart" height="140"
+                data-labels='@json($weeklyComparison->pluck('label'))'
+                data-this='@json($weeklyComparison->pluck('minggu_ini'))'
+                data-last='@json($weeklyComparison->pluck('minggu_lalu'))'></canvas>
+    </div>
+</div>
+
+{{-- Link ke halaman statistik per sumber --}}
+<div class="mb-6">
+    <a href="{{ route('dashboard.sources') }}" data-no-ajax
+       class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg border border-[var(--navy)]/20 bg-white hover:bg-[var(--navy)]/5 transition-colors">
+        📊 Lihat Statistik per Sumber Berita &rarr;
+    </a>
 </div>
 
 {{-- Filters --}}
-<form id="filterForm" method="GET" action="{{ route('dashboard') }}" class="bg-white rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 p-5 mb-5">
+<form id="filterForm" method="GET" action="{{ route('dashboard') }}" class="bg-[var(--navy)]/5 rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-[var(--navy)]/15 p-5 mb-5">
     <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
         <input type="text" name="q" value="{{ request('q') }}" placeholder="Cari judul berita..."
-               class="md:col-span-2 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+               class="md:col-span-2 border border-[var(--navy)]/20 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
 
-        <select name="sentiment" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <select name="sentiment" class="border border-[var(--navy)]/20 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
             <option value="">Semua Sentimen</option>
             @foreach(['positif','netral','negatif'] as $s)
                 <option value="{{ $s }}" @selected(request('sentiment') === $s)>{{ ucfirst($s) }}</option>
             @endforeach
         </select>
 
-        <select name="source" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <select name="source" class="border border-[var(--navy)]/20 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
             <option value="">Semua Sumber</option>
             @foreach($sources as $src)
                 <option value="{{ $src }}" @selected(request('source') === $src)>{{ $src }}</option>
             @endforeach
         </select>
 
-        <input type="date" name="from" value="{{ request('from') }}" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
-        <input type="date" name="to" value="{{ request('to') }}" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <input type="date" name="from" value="{{ request('from') }}" class="border border-[var(--navy)]/20 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
     </div>
 
     <div class="flex flex-wrap items-center gap-4 mt-4">
@@ -80,19 +96,19 @@
             <input type="checkbox" name="urgent_only" value="1" @checked(request('urgent_only'))>
             Hanya mendesak
         </label>
-        <select name="archived" class="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+        <select name="archived" class="border border-[var(--navy)]/20 bg-white rounded-lg px-2 py-1.5 text-sm">
             <option value="">Semua status arsip</option>
             <option value="1" @selected(request('archived') === '1')>Sudah diarsipkan</option>
             <option value="0" @selected(request('archived') === '0')>Belum diarsipkan</option>
         </select>
-        <select name="sort" class="border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+        <select name="sort" class="border border-[var(--navy)]/20 bg-white rounded-lg px-2 py-1.5 text-sm">
             <option value="newest" @selected(request('sort', 'newest') === 'newest')>Terbaru</option>
             <option value="oldest" @selected(request('sort') === 'oldest')>Terlama</option>
         </select>
 
         <div class="md:ml-auto flex gap-2 w-full md:w-auto">
             <button type="submit" class="flex-1 md:flex-none bg-[var(--navy)] text-white text-sm px-4 py-2 rounded-lg hover:bg-[var(--navy-light)] transition-colors">Terapkan</button>
-            <a href="{{ route('dashboard') }}" class="flex-1 md:flex-none text-center text-sm px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 transition-colors">Reset</a>
+            <a href="{{ route('dashboard') }}" class="flex-1 md:flex-none text-center text-sm px-4 py-2 rounded-lg border border-[var(--navy)]/20 bg-white hover:bg-[var(--navy)]/5 transition-colors">Reset</a>
             <a href="{{ route('dashboard.export', request()->query()) }}" data-no-ajax class="flex-1 md:flex-none text-center text-sm px-4 py-2 rounded-lg bg-[var(--amber)] text-[var(--ink)] font-medium hover:brightness-95 transition">Export CSV</a>
         </div>
     </div>
@@ -121,10 +137,12 @@
         @foreach($news as $item)
             <tr class="border-t border-slate-100 hover:bg-slate-50/80 transition-colors {{ $item->is_urgent ? 'bg-amber-50/50' : '' }}">
                 <td class="p-3 align-top">
-                    <a href="{{ $item->link }}" target="_blank" data-no-ajax class="font-medium text-[var(--navy)] hover:underline">
+                    <a href="{{ route('berita.show', $item->id) }}" data-no-ajax class="font-medium text-[var(--navy)] hover:underline">
                         {{ $item->title }}
                     </a>
-                    @if($item->analysis)
+                    @if($item->summary)
+                        <p class="text-xs text-slate-500 mt-1">{{ Str::limit($item->summary, 130) }}</p>
+                    @elseif($item->analysis)
                         <p class="text-xs text-slate-500 mt-1">{{ Str::limit($item->analysis, 130) }}</p>
                     @endif
                 </td>
@@ -145,6 +163,10 @@
                     @if($item->archived)
                         <span class="block w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Diarsipkan</span>
                     @endif
+                    <button type="button" data-archive-toggle data-id="{{ $item->id }}"
+                            class="block w-fit px-2.5 py-1 rounded-full text-xs font-medium border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                        {{ $item->archived ? 'Batal arsip' : 'Arsipkan' }}
+                    </button>
                 </td>
             </tr>
         @endforeach

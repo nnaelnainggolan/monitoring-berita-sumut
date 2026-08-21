@@ -29,6 +29,7 @@ class NewsIngestController extends Controller
         $validated = collect($items)->map(function ($item) use ($request) {
             return validator($item, [
                 'title'        => 'required|string',
+                'summary'      => 'nullable|string',
                 'link'         => 'required|url',
                 'source'       => 'nullable|string',
                 'published_at' => 'nullable|date',

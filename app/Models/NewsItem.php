@@ -8,6 +8,7 @@ class NewsItem extends Model
 {
     protected $fillable = [
         'title',
+        'summary',
         'link',
         'source',
         'published_at',

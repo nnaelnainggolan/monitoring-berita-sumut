@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Monitoring Berita Pemprov Sumut')</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -11,7 +12,7 @@
     <style>
         :root {
             --ink: #2B0A0F;
-            --navy: #100952;
+            --navy: #7A1B24;
             --navy-light: #93242F;
             --paper: #F7F5F0;
             --amber: #C9A227;
@@ -64,7 +65,7 @@
         <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:top-[29px] bg-[var(--navy)] text-white">
             <div class="p-6 border-b border-white/10">
                 <div>
-                    <img src="{{ asset('logo.png') }}" class="w-11 h-11 rounded-xl object-cover mb-3">
+                    <img src="{{ asset('images/logo.png') }}" class="w-11 h-11 rounded-xl object-cover mb-3">
                 </div>
                 <p class="font-display text-lg font-semibold leading-snug">Monitoring<br>Berita Sumut</p>
                 <p class="text-[11px] text-[var(--amber)] font-mono mt-1 tracking-wide">AI NEWS DESK</p>
@@ -78,10 +79,10 @@
                 </a>
             </nav>
 
-            {{-- Peta Sumut --}}
-            <div class="px-4 mt-2">
+            {{-- Peta Sumut — ganti src dengan gambar peta kamu --}}
+            <div>
                 <div>
-                    <img src="{{ asset('images/peta-sumut.png') }}" alt="Peta Sumatera Utara"">
+                    <img src="{{ asset('images/peta-sumut.png') }}" alt="Peta Sumatera Utara" class="w-full h-auto object-contain bg-white/5 p-2">
                 </div>
                 <p class="text-[10px] text-slate-400 font-mono text-center mt-2">Wilayah Cakupan Pemantauan</p>
             </div>
@@ -104,5 +105,36 @@
             </main>
         </div>
     </div>
+
+    <script>
+    // Toggle arsip berita — berlaku global di semua halaman (tabel dashboard & halaman detail)
+    document.addEventListener('click', async function (e) {
+        const btn = e.target.closest('[data-archive-toggle]');
+        if (!btn) return;
+        btn.disabled = true;
+        try {
+            const res = await fetch(`/berita/${btn.dataset.id}/toggle-archive`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                }
+            });
+            await res.json();
+            if (btn.dataset.redirect) {
+                window.location.reload();
+                return;
+            }
+            const results = document.getElementById('dashboard-results');
+            if (results && results.contains(btn) && typeof window.__reloadDashboardResults === 'function') {
+                window.__reloadDashboardResults();
+            } else {
+                window.location.reload();
+            }
+        } catch (err) {
+            btn.disabled = false;
+        }
+    });
+    </script>
 </body>
 </html>

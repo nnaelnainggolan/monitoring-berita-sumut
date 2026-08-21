@@ -45,9 +45,24 @@
     </div>
 
     {{-- Banner image slot — ganti dengan foto Kantor Gubernur / peta Sumut / dokumentasi kegiatan --}}
-    <div class="rounded-2xl overflow-hidden">
-        <img src="{{ asset('images/hero.jpeg') }}" class="rounded-2xl w-full h-full object-cover">
+    <div>
+        <img src="{{ asset('images/hero.png') }}" class="rounded-2xl w-full h-full object-cover">
     </div>
+</div>
+
+{{-- Tombol aktifkan notifikasi & tombol jalankan pencarian berita terbaru --}}
+<div class="mb-6 flex flex-wrap items-center gap-2">
+    <button id="enableNotif" type="button"
+            class="text-sm px-4 py-2 rounded-lg border border-[var(--navy)]/20 bg-white hover:bg-[var(--navy)]/5 transition-colors">
+        🔔 Aktifkan notifikasi berita mendesak
+    </button>
+    <span id="notifStatus" class="text-xs text-slate-400 ml-2"></span>
+
+    <button id="runWorkflow" type="button"
+            class="text-sm px-4 py-2 rounded-lg bg-[var(--amber)] text-[var(--ink)] font-medium hover:brightness-95 transition disabled:opacity-60 disabled:cursor-not-allowed">
+        🔄 Cari Berita Terbaru
+    </button>
+    <span id="runWorkflowStatus" class="text-xs text-slate-400"></span>
 </div>
 
 {{-- Region yang di-refresh via AJAX --}}
@@ -58,26 +73,51 @@
 <script>
 (function () {
     let chartInstance = null;
+    let weeklyChartInstance = null;
 
     function initChart() {
         const canvas = document.getElementById('trendChart');
-        if (!canvas) return;
-        if (chartInstance) { chartInstance.destroy(); }
-        chartInstance = new Chart(canvas, {
-            type: 'line',
-            data: {
-                labels: JSON.parse(canvas.dataset.labels),
-                datasets: JSON.parse(canvas.dataset.datasets)
-            },
-            options: {
-                responsive: true,
-                plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, usePointStyle: true } } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#F0E9DC' } },
-                    x: { grid: { display: false } }
+        if (canvas) {
+            if (chartInstance) { chartInstance.destroy(); }
+            chartInstance = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: JSON.parse(canvas.dataset.labels),
+                    datasets: JSON.parse(canvas.dataset.datasets)
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, usePointStyle: true } } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#F0E9DC' } },
+                        x: { grid: { display: false } }
+                    }
                 }
-            }
-        });
+            });
+        }
+
+        const weeklyCanvas = document.getElementById('weeklyChart');
+        if (weeklyCanvas) {
+            if (weeklyChartInstance) { weeklyChartInstance.destroy(); }
+            weeklyChartInstance = new Chart(weeklyCanvas, {
+                type: 'bar',
+                data: {
+                    labels: JSON.parse(weeklyCanvas.dataset.labels),
+                    datasets: [
+                        { label: 'Minggu Ini', data: JSON.parse(weeklyCanvas.dataset.this), backgroundColor: '#7A1B24', borderRadius: 4 },
+                        { label: 'Minggu Lalu', data: JSON.parse(weeklyCanvas.dataset.last), backgroundColor: '#C9A227', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, usePointStyle: true } } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#F0E9DC' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
     }
 
     const results = document.getElementById('dashboard-results');
@@ -120,7 +160,111 @@
         loadUrl(window.location.href, false);
     });
 
+    // Toggle arsip (tabel di dashboard / tombol di halaman detail)
     initChart();
+    window.__reloadDashboardResults = () => loadUrl(window.location.href, false);
+
+    // ===== Notifikasi browser untuk berita mendesak =====
+    const NOTIF_URL = @json(route('dashboard.check-urgent'));
+    const notifBtn = document.getElementById('enableNotif');
+    const notifStatus = document.getElementById('notifStatus');
+    let lastSeenId = parseInt(localStorage.getItem('lastSeenUrgentId') || '{{ $latestId ?? 0 }}', 10);
+
+    function updateNotifStatus() {
+        if (!('Notification' in window)) {
+            notifStatus.textContent = 'Browser tidak mendukung notifikasi';
+            notifBtn.disabled = true;
+            return;
+        }
+        if (Notification.permission === 'granted') {
+            notifStatus.textContent = 'Notifikasi aktif';
+            notifBtn.textContent = '🔔 Notifikasi aktif';
+        } else if (Notification.permission === 'denied') {
+            notifStatus.textContent = 'Notifikasi diblokir di pengaturan browser';
+        }
+    }
+
+    notifBtn?.addEventListener('click', async function () {
+        if (!('Notification' in window)) return;
+        const perm = await Notification.requestPermission();
+        updateNotifStatus();
+        if (perm === 'granted') {
+            new Notification('Notifikasi aktif', { body: 'Kamu akan diberi tahu saat ada berita mendesak baru.' });
+        }
+    });
+
+    updateNotifStatus();
+
+    // ===== Tombol "Cari Berita Terbaru" (memicu webhook n8n) =====
+    const RUN_WORKFLOW_URL = @json(route('dashboard.run-workflow'));
+    const runBtn = document.getElementById('runWorkflow');
+    const runStatus = document.getElementById('runWorkflowStatus');
+    const csrfToken = @json(csrf_token());
+
+    runBtn?.addEventListener('click', async function () {
+        runBtn.disabled = true;
+        const originalLabel = runBtn.textContent;
+        runBtn.textContent = '⏳ Memulai pencarian...';
+        runStatus.textContent = '';
+
+        try {
+            const res = await fetch(RUN_WORKFLOW_URL, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                },
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                runStatus.textContent = data.message || 'Pencarian berita sedang diproses.';
+                runBtn.textContent = '✅ Sedang diproses...';
+
+                // Coba muat ulang hasil beberapa kali selama ~3 menit,
+                // karena analisis AI di n8n berjalan di background.
+                let attempts = 0;
+                const refreshInterval = setInterval(() => {
+                    attempts++;
+                    window.__reloadDashboardResults();
+                    if (attempts >= 6) clearInterval(refreshInterval);
+                }, 30000);
+
+                // Aktifkan lagi tombolnya setelah 60 detik (hindari spam trigger)
+                setTimeout(() => {
+                    runBtn.disabled = false;
+                    runBtn.textContent = originalLabel;
+                }, 60000);
+            } else {
+                runStatus.textContent = data.message || 'Gagal memulai pencarian berita.';
+                runBtn.disabled = false;
+                runBtn.textContent = originalLabel;
+            }
+        } catch (e) {
+            runStatus.textContent = 'Gagal menghubungi server.';
+            runBtn.disabled = false;
+            runBtn.textContent = originalLabel;
+        }
+    });
+
+    async function pollUrgent() {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        try {
+            const res = await fetch(`${NOTIF_URL}?since_id=${lastSeenId}`);
+            const data = await res.json();
+            (data.items || []).forEach(item => {
+                new Notification('🚨 Berita Mendesak', {
+                    body: item.title + (item.source ? ' — ' + item.source : ''),
+                });
+            });
+            if (data.latestId) {
+                lastSeenId = data.latestId;
+                localStorage.setItem('lastSeenUrgentId', lastSeenId);
+            }
+        } catch (e) { /* diam saja kalau gagal, coba lagi di interval berikutnya */ }
+    }
+
+    setInterval(pollUrgent, 30000); // cek tiap 30 detik
 })();
 </script>
 @endsection
