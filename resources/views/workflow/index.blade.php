@@ -1,0 +1,7 @@
+@extends('layouts.app')
+@section('content')
+<p class="eyebrow">PENGUMPULAN BERITA</p><h1 class="font-display text-3xl mb-4">Status sinkronisasi n8n</h1>
+<div class="panel mb-5"><p>{{ $configured ? 'Pemicu n8n telah dikonfigurasi.' : 'URL/token pemicu n8n belum diatur.' }}</p><p class="text-sm mt-2 text-slate-500">Terakhir selesai terkonfirmasi: {{ $lastSuccess?->finished_at?->format('d/m/Y H:i') ?? 'Belum ada' }} @if($lastSuccess) WIB @endif</p><p class="text-sm mt-2 text-slate-500">Webhook diterima berarti permintaan berhasil dikirim. Status selesai memerlukan callback dari n8n. Jumlah kiriman mencakup pembaruan artikel yang sudah ada.</p><a href="{{ route('dashboard') }}" class="btn mt-4">Kembali ke dashboard untuk memicu pencarian</a></div>
+@forelse($runs as $run)<div class="panel mb-3"><div class="flex justify-between gap-3"><strong>{{ \App\Models\WorkflowRun::LABELS[$run->status] }}</strong><span class="text-sm">{{ $run->received_count }} kiriman diproses</span></div><p class="text-xs text-slate-500 mt-2">{{ $run->created_at->format('d/m/Y H:i:s') }} WIB · {{ $run->user?->name ?? 'Jadwal n8n' }}</p><p class="text-xs text-slate-500 mt-2 break-all">ID: {{ $run->id }} @if($run->execution_id) · Eksekusi n8n: {{ $run->execution_id }} @endif</p>@if($run->message)<p class="text-sm mt-3">{{ $run->message }}</p>@endif</div>@empty<div class="panel text-slate-500">Belum ada riwayat eksekusi. Workflow lama masih bisa mengirim berita; tambahkan callback agar statusnya tercatat.</div>@endforelse
+{{ $runs->links() }}
+@endsection

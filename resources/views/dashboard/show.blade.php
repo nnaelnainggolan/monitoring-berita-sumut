@@ -47,11 +47,28 @@
            class="inline-flex items-center gap-2 bg-[var(--navy)] text-white text-sm px-5 py-2.5 rounded-lg hover:bg-[var(--navy-light)] transition-colors">
             Baca sumber asli &rarr;
         </a>
+        @can('archive-news')
         <button type="button" data-archive-toggle data-id="{{ $item->id }}" data-redirect="{{ route('berita.show', $item->id) }}"
                 class="inline-flex items-center gap-2 border border-slate-300 text-slate-600 text-sm px-5 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
             {{ $item->archived ? '↩ Batalkan arsip' : '🗄 Arsipkan berita ini' }}
         </button>
+        @endcan
+        @if($item->issue_id)<a class="btn-secondary" href="{{ route('issues.show', $item->issue_id) }}">Lihat isu terkait</a>
+        @else @can('create', \App\Models\Issue::class)<a class="btn-secondary" href="{{ route('issues.create', ['news_id' => $item->id]) }}">Buat isu dari berita</a>@endcan @endif
+        @can('review-news')<a class="btn" href="{{ route('news.review', $item) }}">Periksa analisis</a>@endcan
     </div>
 </div>
 
+<div class="panel mt-5"><p class="eyebrow">BERITA #{{ $item->id }}</p><h2 class="font-display text-xl mb-3">Klasifikasi & verifikasi</h2>
+<p class="text-sm">Kategori: {{ $item->category?->name ?? 'Belum ditentukan' }} · Wilayah: {{ $item->region?->name ?? 'Belum ditentukan' }} · OPD: {{ $item->agency?->name ?? 'Belum ditentukan' }}</p>
+<p class="text-sm mt-2">{{ $item->verification_status === 'verified' ? 'Terverifikasi' : 'Perlu diperiksa' }}@if($item->verified_at) oleh {{ $item->verifier?->name }} · {{ $item->verified_at->format('d/m/Y H:i') }} WIB @endif</p>
+</div>
+<div class="panel mt-5"><h2 class="font-display text-xl mb-3">Riwayat pemeriksaan</h2>
+@forelse($item->reviews as $review)
+<details class="border-t py-3"><summary class="cursor-pointer">{{ $review->user->name }} · {{ $review->created_at->format('d/m/Y H:i') }} · {{ $review->note }}</summary>
+<div class="overflow-x-auto mt-3"><table class="w-full text-sm"><thead><tr><th class="text-left">Kolom</th><th class="text-left">Sebelum</th><th class="text-left">Sesudah</th></tr></thead><tbody>
+@foreach($review->after as $field => $value)<tr class="border-t"><td class="p-2">{{ $field }}</td><td class="p-2 whitespace-pre-wrap">{{ is_bool($review->before[$field] ?? null) ? (($review->before[$field] ?? false) ? 'Ya' : 'Tidak') : ($review->before[$field] ?? '—') }}</td><td class="p-2 whitespace-pre-wrap">{{ is_bool($value) ? ($value ? 'Ya' : 'Tidak') : ($value ?? '—') }}</td></tr>@endforeach
+</tbody></table></div></details>
+@empty<p class="text-sm text-slate-500">Belum ada pemeriksaan oleh analis.</p>@endforelse
+</div>
 @endsection

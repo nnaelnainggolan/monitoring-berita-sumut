@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\NewsItemResource;
 use App\Models\NewsItem;
-use Illuminate\Http\Request;
+use App\Support\NewsFilters;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NewsApiController extends Controller
 {
@@ -16,23 +18,7 @@ class NewsApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = NewsItem::query();
-
-        if ($request->filled('q')) {
-            $query->where('title', 'like', '%' . $request->input('q') . '%');
-        }
-        if ($request->filled('sentiment')) {
-            $query->where('sentiment', $request->input('sentiment'));
-        }
-        if ($request->filled('source')) {
-            $query->where('source', $request->input('source'));
-        }
-        if ($request->boolean('urgent_only')) {
-            $query->where('is_urgent', true);
-        }
-        if ($request->filled('archived')) {
-            $query->where('archived', $request->input('archived') === '1');
-        }
+        $query = NewsFilters::query($request);
 
         $sort = $request->input('sort', 'newest');
         $query->orderBy('published_at', $sort === 'oldest' ? 'asc' : 'desc');
@@ -43,8 +29,8 @@ class NewsApiController extends Controller
             'data' => NewsItemResource::collection($news->items()),
             'meta' => [
                 'current_page' => $news->currentPage(),
-                'last_page'    => $news->lastPage(),
-                'total'        => $news->total(),
+                'last_page' => $news->lastPage(),
+                'total' => $news->total(),
             ],
         ]);
     }
@@ -63,6 +49,7 @@ class NewsApiController extends Controller
     public function toggleArchive(NewsItem $news): NewsItemResource
     {
         $news->update(['archived' => ! $news->archived]);
+
         return new NewsItemResource($news);
     }
 
@@ -72,11 +59,11 @@ class NewsApiController extends Controller
     public function stats(): JsonResponse
     {
         return response()->json([
-            'total'   => NewsItem::count(),
+            'total' => NewsItem::count(),
             'positif' => NewsItem::where('sentiment', 'positif')->count(),
-            'netral'  => NewsItem::where('sentiment', 'netral')->count(),
+            'netral' => NewsItem::where('sentiment', 'netral')->count(),
             'negatif' => NewsItem::where('sentiment', 'negatif')->count(),
-            'urgent'  => NewsItem::where('is_urgent', true)->count(),
+            'urgent' => NewsItem::where('is_urgent', true)->count(),
         ]);
     }
 
@@ -113,11 +100,12 @@ class NewsApiController extends Controller
 
         $result = $days->map(function ($date) use ($rows) {
             $dayRows = $rows[$date] ?? collect();
+
             return [
-                'date'    => $date,
-                'label'   => \Carbon\Carbon::parse($date)->format('d/m'),
+                'date' => $date,
+                'label' => Carbon::parse($date)->format('d/m'),
                 'positif' => (int) optional($dayRows->firstWhere('sentiment', 'positif'))->jumlah,
-                'netral'  => (int) optional($dayRows->firstWhere('sentiment', 'netral'))->jumlah,
+                'netral' => (int) optional($dayRows->firstWhere('sentiment', 'netral'))->jumlah,
                 'negatif' => (int) optional($dayRows->firstWhere('sentiment', 'negatif'))->jumlah,
             ];
         });
@@ -144,9 +132,10 @@ class NewsApiController extends Controller
         $result = collect(range(0, 6))->map(function ($i) use ($thisWeekStart, $lastWeekStart, $thisWeek, $lastWeek) {
             $thisDate = $thisWeekStart->copy()->addDays($i)->format('Y-m-d');
             $lastDate = $lastWeekStart->copy()->addDays($i)->format('Y-m-d');
+
             return [
-                'label'       => $thisWeekStart->copy()->addDays($i)->translatedFormat('D'),
-                'minggu_ini'  => (int) ($thisWeek[$thisDate] ?? 0),
+                'label' => $thisWeekStart->copy()->addDays($i)->translatedFormat('D'),
+                'minggu_ini' => (int) ($thisWeek[$thisDate] ?? 0),
                 'minggu_lalu' => (int) ($lastWeek[$lastDate] ?? 0),
             ];
         });
