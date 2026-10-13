@@ -16,7 +16,13 @@ class NewsApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = NewsItem::query();
+        $query = NewsItem::with(['category', 'region', 'agency']);
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from', 'q' => 'nullable|string|max:255']);
+        foreach (['category_id', 'region_id', 'agency_id', 'verification_status'] as $field) {
+            if ($request->filled($field)) $query->where($field, $request->input($field));
+        }
+        if ($request->filled('from')) $query->whereDate('published_at', '>=', $request->date('from'));
+        if ($request->filled('to')) $query->whereDate('published_at', '<=', $request->date('to'));
 
         if ($request->filled('q')) {
             $query->where('title', 'like', '%' . $request->input('q') . '%');

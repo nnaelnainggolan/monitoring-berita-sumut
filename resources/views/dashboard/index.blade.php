@@ -12,7 +12,7 @@
             $firstDay = $today->copy()->startOfMonth();
             $startOffset = $firstDay->dayOfWeekIso % 7; // 0 = Minggu
             $daysInMonth = $today->daysInMonth;
-            $cells = collect(range(1, $startOffset))->map(fn() => null)
+            $cells = collect(array_fill(0, $startOffset, null))
                 ->concat(range(1, $daysInMonth));
         @endphp
         <div class="hidden sm:block absolute top-4 right-4 w-[190px] bg-white/10 rounded-lg p-3 font-mono">
@@ -58,11 +58,13 @@
     </button>
     <span id="notifStatus" class="text-xs text-slate-400 ml-2"></span>
 
+    @can('review-news')
     <button id="runWorkflow" type="button"
             class="text-sm px-4 py-2 rounded-lg bg-[var(--amber)] text-[var(--ink)] font-medium hover:brightness-95 transition disabled:opacity-60 disabled:cursor-not-allowed">
         🔄 Cari Berita Terbaru
     </button>
     <span id="runWorkflowStatus" class="text-xs text-slate-400"></span>
+    @endcan
 </div>
 
 {{-- Region yang di-refresh via AJAX --}}

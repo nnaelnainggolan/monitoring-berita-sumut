@@ -1,25 +1,16 @@
 <?php
-
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\Taxonomy;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        foreach (['Pendidikan', 'Kesehatan', 'Infrastruktur', 'Ekonomi', 'Lingkungan', 'Pelayanan Publik', 'Kebencanaan'] as $name) {
+            Taxonomy::firstOrCreate(['kind' => 'category', 'name' => $name]);
+        }
+        // Admin awal dibuat secara interaktif dengan php artisan app:create-admin.
     }
 }

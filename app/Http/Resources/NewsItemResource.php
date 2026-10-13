@@ -20,6 +20,8 @@ class NewsItemResource extends JsonResource
             'is_urgent'    => (bool) $this->is_urgent,
             'analysis'     => $this->analysis,
             'archived'     => (bool) $this->archived,
+            'verification_status' => $this->verification_status,
+            'category' => $this->category?->name, 'region' => $this->region?->name, 'agency' => $this->agency?->name,
         ];
     }
 }

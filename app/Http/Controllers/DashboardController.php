@@ -93,7 +93,7 @@ class DashboardController extends Controller
 
     public function show(NewsItem $berita)
     {
-        return view('dashboard.show', ['item' => $berita]);
+        return view('dashboard.show', ['item' => $berita->load(['category', 'region', 'agency', 'verifier', 'reviews.user'])]);
     }
 
     public function toggleArchive(Request $request, NewsItem $berita)
@@ -216,7 +216,16 @@ class DashboardController extends Controller
 
     private function filtered(Request $request)
     {
-        $query = NewsItem::query();
+        $request->validate([
+            'q' => 'nullable|string|max:255', 'source' => 'nullable|string|max:255',
+            'sentiment' => 'nullable|in:positif,netral,negatif', 'from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from',
+            'category_id' => 'nullable|integer', 'region_id' => 'nullable|integer', 'agency_id' => 'nullable|integer',
+            'verification_status' => 'nullable|in:pending,verified',
+        ]);
+        $query = NewsItem::with(['category', 'region', 'agency']);
+        foreach (['category_id', 'region_id', 'agency_id', 'verification_status'] as $field) {
+            if ($request->filled($field)) $query->where($field, $request->input($field));
+        }
 
         if ($request->filled('q')) {
             $query->where('title', 'like', '%' . $request->string('q') . '%');

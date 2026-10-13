@@ -91,6 +91,14 @@
         <input type="date" name="from" value="{{ request('from') }}" class="border border-[var(--navy)]/20 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
     </div>
 
+    <div class="grid md:grid-cols-4 gap-3 mt-4">
+        @foreach(\App\Models\Taxonomy::KINDS as $kind => $label)
+        <label>{{ $label }}<select class="field" name="{{ $kind }}_id"><option value="">Semua {{ $label }}</option>
+        @foreach(\App\Models\Taxonomy::where('kind', $kind)->orderBy('name')->get() as $option)<option value="{{ $option->id }}" @selected((string)request($kind.'_id') === (string)$option->id)>{{ $option->name }}</option>@endforeach
+        </select></label>@endforeach
+        <label>Verifikasi<select class="field" name="verification_status"><option value="">Semua status</option><option value="pending" @selected(request('verification_status') === 'pending')>Perlu diperiksa</option><option value="verified" @selected(request('verification_status') === 'verified')>Terverifikasi</option></select></label>
+        <label>Sampai tanggal<input class="field" type="date" name="to" value="{{ request('to') }}"></label>
+    </div>
     <div class="flex flex-wrap items-center gap-4 mt-4">
         <label class="text-sm flex items-center gap-2">
             <input type="checkbox" name="urgent_only" value="1" @checked(request('urgent_only'))>
@@ -122,7 +130,7 @@
         <p class="text-sm text-slate-500">Coba ubah filter, atau tunggu workflow n8n mengirim data berikutnya.</p>
     </div>
 @else
-<div class="bg-white rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 overflow-hidden">
+<div class="bg-white rounded-2xl shadow-[0_1px_3px_rgba(17,20,43,0.06)] border border-slate-200/70 overflow-x-auto">
     <table class="w-full text-sm">
         <thead class="bg-slate-50 text-left text-slate-400 text-[11px] font-mono uppercase tracking-wide border-b border-slate-200">
             <tr>
@@ -157,16 +165,19 @@
                     ])>{{ ucfirst($item->sentiment) }}</span>
                 </td>
                 <td class="p-3 align-top space-y-1">
+                    <span class="block text-xs text-slate-500">{{ $item->verification_status === 'verified' ? '✓ Terverifikasi' : 'Perlu diperiksa' }}</span>
                     @if($item->is_urgent)
                         <span class="block w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Mendesak</span>
                     @endif
                     @if($item->archived)
                         <span class="block w-fit px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-500">Diarsipkan</span>
                     @endif
+                    @can('archive-news')
                     <button type="button" data-archive-toggle data-id="{{ $item->id }}"
                             class="block w-fit px-2.5 py-1 rounded-full text-xs font-medium border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
                         {{ $item->archived ? 'Batal arsip' : 'Arsipkan' }}
                     </button>
+                    @endcan
                 </td>
             </tr>
         @endforeach

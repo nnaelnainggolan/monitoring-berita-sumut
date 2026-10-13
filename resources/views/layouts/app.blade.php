@@ -40,6 +40,13 @@
             border: 1.5px dashed #D8CBB8;
             background: repeating-linear-gradient(135deg, #F0E9DC 0 10px, #F7F5F0 10px 20px);
         }
+        .panel { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 24px; }
+        .field { display: block; width: 100%; background: white; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; margin-top: 5px; color: #2B0A0F; }
+        .field:focus { outline: 2px solid #C9A227; outline-offset: 1px; }
+        .btn, .btn-secondary { display: inline-block; border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; text-align: center; }
+        .btn { background: #7A1B24; color: white; } .btn-secondary { border: 1px solid #cbd5e1; background: white; }
+        .eyebrow { color: #7A1B24; font: 11px 'IBM Plex Mono', monospace; letter-spacing: .12em; margin-bottom: 12px; }
+        label { font-size: 14px; } summary:focus-visible { outline: 2px solid #C9A227; }
     </style>
 </head>
 <body class="text-[var(--ink)] antialiased">
@@ -62,6 +69,7 @@
 
     <div class="md:flex">
         {{-- Sidebar (desktop) --}}
+        @auth
         <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:top-[29px] bg-[var(--navy)] text-white">
             <div class="p-6 border-b border-white/10">
                 <div>
@@ -91,16 +99,31 @@
                 Sinkron otomatis &middot; n8n workflow
             </div>
         </aside>
+        @endauth
 
         {{-- Main --}}
-        <div class="flex-1 md:pl-64">
+        <div class="flex-1 @auth md:pl-64 @endauth">
             {{-- Mobile top bar --}}
             <div class="md:hidden bg-[var(--navy)] text-white px-4 py-3 flex items-center justify-between">
                 <p class="font-display font-semibold">Monitoring Berita Sumut</p>
                 <span class="text-[10px] font-mono text-[var(--amber)]">AI NEWS DESK</span>
             </div>
 
+            @auth
+            <header class="bg-white border-b px-4 md:px-8 py-3 flex flex-wrap gap-3 items-center text-sm">
+                <a href="{{ route('dashboard') }}">Berita</a>
+                @if(Route::has('issues.index'))<a href="{{ route('issues.index') }}">Isu & tugas</a>@endif
+                @if(Route::has('reports.index'))<a href="{{ route('reports.index') }}">Laporan</a>@endif
+                @if(Route::has('notifications.index'))<a href="{{ route('notifications.index') }}">Notifikasi ({{ auth()->user()->unreadNotifications()->count() }})</a>@endif
+                @can('administer')<a href="{{ route('admin.users.index') }}">Pengguna</a><a href="{{ route('admin.taxonomies.index') }}">Klasifikasi</a>@endcan
+                @if(Route::has('workflow.index'))@can('review-news')<a href="{{ route('workflow.index') }}">Sinkronisasi</a>@endcan @endif
+                <span class="md:ml-auto text-slate-500">{{ auth()->user()->name }} · {{ \App\Models\User::ROLES[auth()->user()->role] }}</span>
+                <form method="POST" action="{{ route('logout') }}">@csrf<button class="text-red-700">Keluar</button></form>
+            </header>
+            @endauth
             <main class="max-w-6xl mx-auto p-4 md:p-8">
+                @if(session('status'))<div role="status" class="mb-5 rounded-lg p-4 bg-emerald-50 text-emerald-800">{{ session('status') }}</div>@endif
+                @if($errors->any())<div role="alert" class="mb-5 rounded-lg p-4 bg-red-50 text-red-800"><ul>@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
                 @yield('content')
             </main>
         </div>
