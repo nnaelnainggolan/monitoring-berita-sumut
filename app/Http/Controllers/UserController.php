@@ -11,18 +11,24 @@ use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
-    public function index() { return view('admin.users', ['users' => User::orderBy('name')->paginate(20)]); }
+    public function index()
+    {
+        return view('admin.users', ['users' => User::orderBy('name')->paginate(20)]);
+    }
 
     public function store(Request $request)
     {
         User::create($request->validate($this->rules()));
+
         return back()->with('status', 'Pengguna ditambahkan.');
     }
 
     public function update(Request $request, User $user)
     {
         $data = $request->validate($this->rules($user));
-        if (empty($data['password'])) unset($data['password']);
+        if (empty($data['password'])) {
+            unset($data['password']);
+        }
         DB::transaction(function () use ($user, $data) {
             $admins = User::where('role', 'admin')->where('is_active', true)->lockForUpdate()->get();
             $user->refresh();
@@ -31,8 +37,11 @@ class UserController extends Controller
                 throw ValidationException::withMessages(['role' => 'Minimal satu admin aktif harus tetap tersedia.']);
             }
             $user->update($data);
-            if (! $user->is_active || isset($data['password'])) $user->tokens()->delete();
+            if (! $user->is_active || isset($data['password'])) {
+                $user->tokens()->delete();
+            }
         });
+
         return back()->with('status', 'Pengguna diperbarui.');
     }
 

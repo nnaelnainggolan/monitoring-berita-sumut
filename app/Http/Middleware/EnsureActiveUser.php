@@ -18,6 +18,7 @@ class EnsureActiveUser
             }
             abort(403, 'Akun tidak aktif. Hubungi administrator.');
         }
+
         return $next($request);
     }
 }

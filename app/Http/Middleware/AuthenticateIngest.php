@@ -13,6 +13,7 @@ class AuthenticateIngest
         $provided = $request->header('X-API-Key');
         abort_unless(is_string($expected) && $expected !== '' && is_string($provided)
             && $provided !== '' && hash_equals($expected, $provided), 401, 'Unauthorized');
+
         return $next($request);
     }
 }

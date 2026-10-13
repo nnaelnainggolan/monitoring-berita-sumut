@@ -1,114 +1,150 @@
-# Dashboard Monitoring Berita Pemprov Sumut (Laravel)
+# Monitoring Berita Sumut
 
-File-file ini adalah **kode siap pakai** untuk ditempel ke project Laravel baru — bukan project Laravel utuh (karena environment ini tidak punya akses ke Packagist/Composer untuk generate frameworknya).
+Aplikasi Laravel untuk menerima berita hasil analisis n8n, memverifikasi hasil AI, mengelola isu dan penugasan, serta membuat laporan harian. Antarmuka menggunakan Blade, Tailwind CSS, dan Chart.js. Database bawaan menggunakan SQLite; koneksi MySQL dapat diatur melalui `.env`.
 
-## 1. Cara Pasang
+## Fitur per tahap
 
-```bash
-composer create-project laravel/laravel monitoring-berita-sumut
-cd monitoring-berita-sumut
-```
+| Tahap | Fitur |
+|---|---|
+| 1 — Fondasi editorial | Login, empat peran pengguna, kategori/wilayah/OPD, koreksi hasil AI, riwayat pemeriksaan, dan proteksi hasil terverifikasi dari kiriman ulang n8n |
+| 2 — Tindak lanjut | Isu dari berita, penanggung jawab, prioritas, tenggat, perubahan status, komentar, notifikasi aplikasi/email, preferensi pemantauan, dan pengingat keterlambatan |
+| 3 — Pelaporan dan pemantauan | Saran artikel serupa dengan konfirmasi analis, penautan/pemisahan artikel, laporan harian berisi sumber, PDF, dan pencatatan status eksekusi n8n |
 
-Salin folder/file dari paket ini ke lokasi yang sama persis di project barumu:
+Fitur lama tetap tersedia: dashboard sentimen, grafik 14 hari dan mingguan, statistik sumber, pencarian/filter, arsip, ekspor CSV, notifikasi browser, dan API mobile. Angka statistik/grafik dashboard menunjukkan seluruh data; filter berlaku pada daftar berita dan ekspor. Laporan harian menggunakan berita terverifikasi untuk sorotan dan statistik sentimen.
 
-```
-database/migrations/2026_08_11_000000_create_news_items_table.php
-app/Models/NewsItem.php
-app/Http/Controllers/Api/NewsIngestController.php
-app/Http/Controllers/DashboardController.php
-routes/api.php         -> gabungkan isinya ke routes/api.php bawaan Laravel
-routes/web.php          -> gabungkan isinya ke routes/web.php bawaan Laravel
-resources/views/layouts/app.blade.php
-resources/views/dashboard/index.blade.php
-```
+## Persyaratan
 
-Atur `.env`:
+- PHP **8.4.1 atau lebih baru dalam seri 8.x**. Persyaratan ini mengikuti dependensi terkunci dalam `composer.lock`.
+- Composer 2; ekstensi PHP `ctype`, `curl`, `dom`, `fileinfo`, `mbstring`, `openssl`, `pdo`, `tokenizer`, `xml`, dan `pdo_sqlite` atau `pdo_mysql`. `gd` diperlukan bila laporan dikembangkan menggunakan gambar.
+- Node.js 22.12 atau lebih baru dan npm untuk membangun aset Vite.
+- Queue worker dan scheduler untuk notifikasi, pengingat, dan laporan otomatis.
 
-```env
-DB_DATABASE=monitoring_berita_sumut
-DB_USERNAME=...
-DB_PASSWORD=...
+## Memperbarui instalasi lama (Laragon/PowerShell)
 
-NEWS_INGEST_TOKEN=ganti-dengan-token-rahasia
-```
+Cadangkan database yang benar-benar dipakai dan `.env` terlebih dahulu. Jalankan dari folder proyek, dengan perubahan lokal sudah disimpan dalam commit atau stash milikmu.
 
-Tambahkan di `config/services.php`:
-
-```php
-'n8n' => [
-    'ingest_token' => env('NEWS_INGEST_TOKEN'),
-],
-```
-
-Lalu jalankan:
-
-```bash
-php artisan migrate
+```powershell
+git fetch origin
+git switch --track origin/codex/monitoring-berita-workflow
+composer install
+npm ci
+npm run build
+php artisan optimize:clear
+php artisan migrate --seed
+php artisan app:create-admin
 php artisan serve
 ```
 
-Dashboard bisa diakses di `http://localhost:8000`.
+Jika branch tersebut sudah ada di komputer, gunakan `git switch codex/monitoring-berita-workflow` lalu `git pull --ff-only`.
 
-## 2. Menghubungkan n8n ke Laravel
+- Pertahankan `APP_KEY` dan pengaturan database pada `.env` lama. Jangan menjalankan `migrate:fresh` pada database yang berisi data.
+- Migration menambahkan tabel/kolom, mempertahankan berita lama, dan memberi status `pending` untuk pemeriksaan awal.
+- Pengguna lama mendapat peran `leader` (baca laporan). Buat akun admin dengan email baru melalui `app:create-admin`, lalu kelola pengguna lama dari menu **Pengguna**.
+- Tidak ada kata sandi admin bawaan dan tidak ada pendaftaran publik. Perintah admin meminta kata sandi secara tersembunyi.
+- API mobile sekarang membutuhkan Bearer token; lihat [panduan API](docs/API.md).
+- File `monitoring_berita_sumut` yang sudah ada di histori repositori adalah SQLite. Pilih database aktif berdasarkan `.env`; file itu tidak otomatis dipakai oleh instalasi baru.
 
-Tambahkan **node HTTP Request** baru setelah node **"Gabung Analisis"** di workflow n8n kamu (jalan paralel dengan node Arsipkan Berita / Filter Negatif-Mendesak yang sudah ada).
+Periksa atau tambahkan konfigurasi berikut pada `.env`:
 
-Konfigurasi node:
-
-| Setting | Nilai |
-|---|---|
-| Method | `POST` |
-| URL | `https://domain-kamu.com/api/n8n/news` |
-| Body Content Type | JSON |
-| Header | `X-API-Key: <isi sama dengan NEWS_INGEST_TOKEN di .env>` |
-
-Body JSON (mapping dari field hasil "Analisis Berita AI", sesuaikan nama field dengan output aktualmu):
-
-```json
-{
-  "title": "={{ $json.title }}",
-  "summary": "={{ $json.summary }}",
-  "link": "={{ $json.link }}",
-  "source": "={{ $json.source }}",
-  "published_at": "={{ $json.publishedAt }}",
-  "sentiment": "={{ $json.sentiment }}",
-  "is_urgent": "={{ $json.isUrgent }}",
-  "analysis": "={{ $json.reason }}"
-}
+```dotenv
+APP_TIMEZONE=Asia/Jakarta
+APP_LOCALE=id
+APP_URL=http://localhost:8000
+QUEUE_CONNECTION=database
+NEWS_INGEST_TOKEN=
+N8N_TRIGGER_WEBHOOK_URL=
+N8N_TRIGGER_TOKEN=
 ```
 
-`summary` diisi dari ringkasan singkat berita (2-3 kalimat) — kalau model AI-mu belum menghasilkan field ini, tambahkan instruksi di prompt node "Analisis Berita AI", misalnya: *"Buat juga ringkasan singkat berita dalam field `summary`, maksimal 3 kalimat."*
+Isi kedua token n8n dengan nilai rahasia yang berbeda dan cocok dengan konfigurasi workflow. Token ingest kosong selalu ditolak. Pada server yang diakses dari n8n, `APP_URL` harus berisi URL HTTPS yang dapat dijangkau n8n.
 
-Endpoint ini menerima **satu objek** atau **array berisi banyak objek** sekaligus (kalau kamu ingin kirim semua berita dalam satu batch, bukan satu per satu).
+## Instalasi baru
 
-### Retry otomatis kalau pengiriman gagal
+```powershell
+git clone --branch codex/monitoring-berita-workflow https://github.com/nnaelnainggolan/monitoring-berita-sumut.git
+cd monitoring-berita-sumut
+composer install
+npm ci
+npm run build
+Copy-Item .env.example .env
+php artisan key:generate
+New-Item -ItemType File -Path database/database.sqlite
+php artisan migrate --seed
+php artisan app:create-admin
+php artisan serve
+```
 
-Supaya data tidak hilang saat Laravel/koneksi sedang down, aktifkan retry bawaan n8n di node **"Kirim ke Endpoint (HTTP)"**:
+Untuk Bash, gunakan `cp .env.example .env` dan `touch database/database.sqlite`. Untuk MySQL, buat database kosong dan ubah `DB_CONNECTION`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD` sebelum migration.
 
-1. Buka node tersebut, pindah ke tab **Settings** (di sebelah tab Parameters).
-2. Aktifkan **"Retry On Fail"**.
-3. Atur **Max Tries** (contoh: 3) dan **Wait Between Tries** (contoh: 5000 ms).
+Buka `http://localhost:8000`, masuk dengan admin yang baru dibuat, lalu tambahkan pengguna, wilayah, dan OPD. Seeder hanya membuat kategori awal; nama wilayah/OPD diisi sesuai kebutuhan instansi.
 
-Dengan ini, kalau request gagal (misalnya Laravel sedang restart atau ngrok terputus), n8n akan otomatis mencoba ulang beberapa kali sebelum benar-benar dianggap gagal.
+## Menjalankan pekerjaan latar belakang
 
-## 3. Struktur Data
+Jalankan di terminal terpisah dari server web:
 
-Tabel `news_items`:
-- `title`, `link` (unik, dipakai untuk upsert — berita yang sama akan ter-update, bukan dobel)
-- `summary` — ringkasan singkat berita untuk tampilan cepat & halaman detail
-- `source` — RSS Pemprov Sumut / RSS Gubernur Sumut
-- `sentiment` — positif / netral / negatif
-- `is_urgent` — hasil node Filter Negatif/Mendesak
-- `analysis` — ringkasan/alasan dari model AI
-- `archived` — ditandai jika sudah lewat node Arsipkan Berita
+```powershell
+php artisan queue:work --tries=3
+```
 
-## 4. Fitur Tambahan
-- **Halaman detail berita** — klik judul berita di tabel untuk membuka `/berita/{id}`, menampilkan ringkasan, analisis AI lengkap, dan tombol ke sumber asli.
-- **Notifikasi browser** — tombol "Aktifkan notifikasi berita mendesak" di dashboard. Setelah diizinkan, browser akan menampilkan notifikasi setiap 30 detik jika ada berita mendesak baru (polling ke `/check-urgent`).
-- **Perbandingan mingguan** — grafik batang membandingkan jumlah berita minggu ini vs minggu lalu, per hari.
-- **Statistik per sumber** — tabel ringkas jumlah berita positif/netral/negatif per sumber RSS, diurutkan dari yang paling banyak berita negatifnya.
+Terminal lain untuk pengembangan lokal:
 
-## 5. Pengembangan Lanjutan
-- Tambah autentikasi login untuk dashboard (Laravel Breeze) jika perlu multi-user.
-- Endpoint bisa juga dipakai dua arah: Laravel bisa expose API untuk n8n *mengambil* data lama, bukan cuma menerima data baru.
-- Notifikasi browser hanya berfungsi selagi tab dashboard terbuka; untuk notifikasi walau tab tertutup, perlu Web Push (Service Worker) yang lebih kompleks.
+```powershell
+php artisan schedule:work
+```
+
+Pada server Linux, jalankan queue worker melalui process manager dan cron setiap menit:
+
+```cron
+* * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Jadwal menggunakan `APP_TIMEZONE`:
+
+| Pekerjaan | Jadwal | Perilaku |
+|---|---|---|
+| `issues:remind` | Setiap jam, 08.00–18.00 | Pengingat isu terlambat, maksimal sekali per isu per hari |
+| `reports:daily` | 07.30 | Snapshot laporan untuk tanggal kemarin |
+| `workflow:mark-stale` | Setiap 5 menit | Menandai eksekusi yang tidak memberi kabar selama 15 menit sebagai belum terkonfirmasi |
+
+Notifikasi aplikasi dan email menggunakan queue. Email bersifat opt-in dan membutuhkan konfigurasi SMTP; `MAIL_MAILER=log` bawaan hanya mencatat pesan di log. Setelah deploy, jalankan `php artisan queue:restart`.
+
+## Penggunaan
+
+1. n8n mengirim berita; operator memantau halaman Berita.
+2. Analis membuka detail → **Periksa analisis**, memperbaiki ringkasan/sentimen/urgensi/klasifikasi, lalu menulis catatan dan memverifikasi.
+3. Pilih **Buat isu dari berita**, tentukan prioritas, penanggung jawab, dan tenggat.
+4. Analis memverifikasi isu. Petugas yang ditugaskan mengubah status ke **Ditindaklanjuti**, kemudian **Selesai**, dengan catatan penanganan.
+5. Periksa saran artikel terkait di halaman isu. Penautan memerlukan konfirmasi; artikel dan tautan sumber tidak dihapus.
+6. Buka **Laporan**, pilih tanggal, lalu unduh PDF. Pimpinan dapat membaca dan mengunduh laporan yang sudah dibuat.
+
+| Hak akses | Admin | Analis | Petugas | Pimpinan |
+|---|---|---|---|---|
+| Membaca berita, isu, laporan | Ya | Ya | Ya | Ya |
+| Mengarsipkan artikel | Ya | Ya | Ya | — |
+| Memverifikasi berita, membuat/menugaskan isu | Ya | Ya | — | — |
+| Memperbarui penanganan dan komentar | Semua isu | Semua isu | Isu yang ditugaskan | — |
+| Menghubungkan artikel, membuka kembali isu selesai | Ya | Ya | — | — |
+| Memicu n8n, melihat sinkronisasi, membuat laporan | Ya | Ya | — | — |
+| Mengelola akun dan klasifikasi | Ya | — | — | — |
+
+## Batasan yang perlu diketahui
+
+- Workflow n8n dan aplikasi Android tidak termasuk repositori ini. Pengiriman berita lama tetap kompatibel; status eksekusi memerlukan callback tambahan sesuai [panduan n8n](docs/N8N.md).
+- Saran artikel memakai kemiripan kata judul, rentang 7 hari, dan wilayah bila tersedia. Ini bukan penilaian kebenaran atau model AI semantik. Maksimal 250 kandidat terbaru diperiksa dan 10 saran ditampilkan.
+- Satu artikel dapat ditautkan ke satu isu. Lepaskan tautan lama sebelum memindahkannya.
+- Laporan merupakan snapshot pertama untuk suatu tanggal; membuka atau menjalankan ulang scheduler tidak menggantinya. Selesaikan verifikasi sebelum membuat laporan manual. Berita tanpa tanggal terbit tidak masuk laporan harian.
+- Status isu pada laporan adalah keadaan saat laporan dibuat, termasuk isu terbuka lintas tanggal. Laporan tidak merekonstruksi status historis suatu isu.
+- Notifikasi browser lama memerlukan tab dashboard terbuka. Notifikasi aplikasi tersimpan, sedangkan email dapat diterima saat tab ditutup.
+- CSS Tailwind, Chart.js, dan font dilayani dari build lokal. Jalankan `npm ci && npm run build` pada pemasangan atau setelah perubahan frontend; folder `public/build` diperlukan pada server. Pengguna tidak perlu mengakses CDN untuk membuka dashboard.
+
+## Pengujian dan catatan pengembangan
+
+```powershell
+php artisan test
+composer audit
+npm run build
+npm audit
+php artisan route:list
+```
+
+Tes memakai database terisolasi sesuai `phpunit.xml`. Jangan mengarahkan konfigurasi pengujian ke database operasional. Lihat [progres dan verifikasi](docs/PROGRESS.md) untuk cakupan dan [panduan n8n](docs/N8N.md) untuk contoh payload.

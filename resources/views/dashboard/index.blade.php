@@ -78,6 +78,7 @@
     let weeklyChartInstance = null;
 
     function initChart() {
+        if (typeof Chart === 'undefined') return;
         const canvas = document.getElementById('trendChart');
         if (canvas) {
             if (chartInstance) { chartInstance.destroy(); }
@@ -128,6 +129,8 @@
         results.style.opacity = 0.5;
         try {
             const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (res.redirected) { window.location.href = res.url; return; }
+            if (!res.ok) { window.location.href = url; return; }
             const html = await res.text();
             results.innerHTML = html;
             initChart();
@@ -164,6 +167,7 @@
 
     // Toggle arsip (tabel di dashboard / tombol di halaman detail)
     initChart();
+    document.addEventListener('DOMContentLoaded', initChart, { once: true });
     window.__reloadDashboardResults = () => loadUrl(window.location.href, false);
 
     // ===== Notifikasi browser untuk berita mendesak =====

@@ -34,7 +34,9 @@ class NewsReviewController extends Controller
             abort_if($news->review_version !== (int) $data['review_version'], 409, 'Berita telah diperbarui. Muat ulang sebelum menyimpan.');
             $before = $news->only(self::FIELDS);
             // Snapshot pertama menjaga hasil AI asli dari berita sebelum fitur review tersedia.
-            if ($news->ai_payload === null) $news->ai_payload = $news->only(['summary', 'sentiment', 'is_urgent', 'analysis']);
+            if ($news->ai_payload === null) {
+                $news->ai_payload = $news->only(['summary', 'sentiment', 'is_urgent', 'analysis']);
+            }
             $news->fill(collect($data)->only(self::FIELDS)->all());
             $news->verified_by = $data['verification_status'] === 'verified' ? $request->user()->id : null;
             $news->verified_at = $data['verification_status'] === 'verified' ? now() : null;
@@ -42,6 +44,7 @@ class NewsReviewController extends Controller
             $news->save();
             $news->reviews()->create(['user_id' => $request->user()->id, 'before' => $before, 'after' => $news->only(self::FIELDS), 'note' => $data['note']]);
         });
+
         return redirect()->route('berita.show', $berita)->with('status', 'Pemeriksaan berita disimpan.');
     }
 }

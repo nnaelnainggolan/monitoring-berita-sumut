@@ -1,9 +1,11 @@
 <?php
+
 namespace Tests\Feature;
 
 use App\Models\NewsItem;
 use App\Models\Taxonomy;
 use App\Models\User;
+use App\Services\DailyReportBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -111,5 +113,55 @@ class EditorialFoundationTest extends TestCase
         $this->actingAs(User::factory()->create(['role' => 'leader']))->get('/?category_id='.$cat->id)->assertOk()->assertSee('Jalan rusak di Medan');
         $this->get('/?category_id=999')->assertOk()->assertSee('Belum ada berita yang cocok');
         $this->get('/export')->assertOk()->assertDownload();
+    }
+
+    public function test_date_only_upper_bound_and_invalid_filters_are_handled(): void
+    {
+        $this->article(['published_at' => '2026-10-08 09:00:00']);
+        $this->actingAs(User::factory()->create())->get('/?to=2026-10-09')->assertOk()->assertSee('Jalan rusak di Medan');
+        $this->getJson('/api/news?to=2026-10-09')->assertOk()->assertJsonPath('meta.total', 1);
+        $this->getJson('/api/news?source[]=bad')->assertUnprocessable();
+        $this->getJson('/api/news?from=2026-10-09&to=2026-10-08')->assertUnprocessable();
+    }
+
+    public function test_ingest_cannot_set_editorial_permissions_or_issue_links(): void
+    {
+        config(['services.n8n.ingest_token' => 'test-key']);
+        $this->withHeader('X-API-Key', 'test-key')->postJson('/api/n8n/news', [
+            'title' => 'Artikel belum diperiksa', 'link' => 'https://example.com/untrusted', 'sentiment' => 'netral',
+            'verification_status' => 'verified', 'verified_by' => 99, 'issue_id' => 99,
+        ])->assertCreated();
+        $news = NewsItem::firstOrFail();
+        $this->assertSame('pending', $news->verification_status);
+        $this->assertNull($news->verified_by);
+        $this->assertNull($news->issue_id);
+    }
+
+    public function test_login_throttling_and_api_token_revocation(): void
+    {
+        $user = User::factory()->create(['password' => 'valid-long-password']);
+        for ($i = 0; $i < 5; $i++) {
+            $this->postJson('/api/auth/token', ['email' => $user->email, 'password' => 'wrong', 'device_name' => 'Test'])->assertUnprocessable();
+        }
+        $this->postJson('/api/auth/token', ['email' => $user->email, 'password' => 'valid-long-password', 'device_name' => 'Test'])->assertTooManyRequests();
+        $this->travel(61)->seconds();
+        $response = $this->postJson('/api/auth/token', ['email' => $user->email, 'password' => 'valid-long-password', 'device_name' => 'Test'])->assertOk();
+        $this->withToken($response->json('token'))->getJson('/api/news')->assertOk();
+        $this->deleteJson('/api/auth/token')->assertNoContent();
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    public function test_ingest_normalizes_utc_dates_for_local_daily_reports(): void
+    {
+        config(['services.n8n.ingest_token' => 'test-key', 'app.timezone' => 'Asia/Jakarta']);
+        $this->withHeader('X-API-Key', 'test-key')->postJson('/api/n8n/news', [
+            'title' => 'Berita lewat tengah malam WIB', 'link' => 'https://example.com/timezone',
+            'sentiment' => 'netral', 'published_at' => '2026-10-11T18:30:00Z',
+        ])->assertCreated();
+        $this->assertDatabaseHas('news_items', ['published_at' => '2026-10-12 01:30:00']);
+        $news = NewsItem::firstOrFail();
+        $this->assertSame('2026-10-11T18:30:00Z', $news->ai_payload['published_at']);
+        $report = app(DailyReportBuilder::class)->generate('2026-10-12');
+        $this->assertSame(1, $report->data['article_count']);
     }
 }

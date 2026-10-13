@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\NewsItem;
-use Illuminate\Http\Request;
+use App\Services\WorkflowTrigger;
+use App\Support\NewsFilters;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DashboardController extends Controller
@@ -21,11 +21,11 @@ class DashboardController extends Controller
         $news = $query->paginate(15)->withQueryString();
 
         $stats = [
-            'total'   => NewsItem::count(),
+            'total' => NewsItem::count(),
             'positif' => NewsItem::where('sentiment', 'positif')->count(),
-            'netral'  => NewsItem::where('sentiment', 'netral')->count(),
+            'netral' => NewsItem::where('sentiment', 'netral')->count(),
             'negatif' => NewsItem::where('sentiment', 'negatif')->count(),
-            'urgent'  => NewsItem::where('is_urgent', true)->count(),
+            'urgent' => NewsItem::where('is_urgent', true)->count(),
         ];
 
         $sources = NewsItem::whereNotNull('source')->distinct()->orderBy('source')->pluck('source');
@@ -54,9 +54,10 @@ class DashboardController extends Controller
             $dayLabel = $thisWeekStart->copy()->addDays($i)->translatedFormat('D');
             $thisDate = $thisWeekStart->copy()->addDays($i)->format('Y-m-d');
             $lastDate = $lastWeekStart->copy()->addDays($i)->format('Y-m-d');
+
             return [
-                'label'       => $dayLabel,
-                'minggu_ini'  => (int) ($thisWeek[$thisDate] ?? 0),
+                'label' => $dayLabel,
+                'minggu_ini' => (int) ($thisWeek[$thisDate] ?? 0),
                 'minggu_lalu' => (int) ($lastWeek[$lastDate] ?? 0),
             ];
         });
@@ -121,7 +122,7 @@ class DashboardController extends Controller
             ->get(['id', 'title', 'source']);
 
         return response()->json([
-            'items'    => $items,
+            'items' => $items,
             'latestId' => max($sinceId, (int) NewsItem::max('id')),
         ]);
     }
@@ -133,49 +134,18 @@ class DashboardController extends Controller
      */
     public function runWorkflow(): JsonResponse
     {
-        $url = config('services.n8n.trigger_webhook_url');
-        $token = config('services.n8n.trigger_token');
+        $result = app(WorkflowTrigger::class)->start(request()->user());
+        $status = $result['code'];
+        unset($result['code']);
 
-        if (! $url) {
-            return response()->json([
-                'message' => 'N8N_TRIGGER_WEBHOOK_URL belum diatur di .env.',
-            ], 500);
-        }
-
-        try {
-            $response = Http::withHeaders([
-                'X-Trigger-Key' => $token,
-            ])->timeout(10)->post($url);
-
-            if ($response->successful()) {
-                return response()->json([
-                    'message' => 'Pencarian berita terbaru sedang diproses. Hasil akan otomatis muncul di dashboard dalam beberapa saat.',
-                ]);
-            }
-
-            if ($response->status() === 401) {
-                return response()->json([
-                    'message' => 'Token webhook n8n tidak valid. Periksa N8N_TRIGGER_TOKEN di .env.',
-                ], 401);
-            }
-
-            return response()->json([
-                'message' => 'n8n merespons dengan status ' . $response->status() . '.',
-            ], 502);
-        } catch (\Throwable $e) {
-            Log::warning('Gagal memicu webhook n8n: ' . $e->getMessage());
-
-            return response()->json([
-                'message' => 'Tidak dapat terhubung ke n8n. Pastikan workflow aktif dan URL webhook benar.',
-            ], 502);
-        }
+        return response()->json($result, $status);
     }
 
     public function export(Request $request): StreamedResponse
     {
         $items = $this->filtered($request)->orderBy('published_at', 'desc')->get();
 
-        $filename = 'berita-' . now()->format('Y-m-d_His') . '.csv';
+        $filename = 'berita-'.now()->format('Y-m-d_His').'.csv';
 
         return response()->streamDownload(function () use ($items) {
             $out = fopen('php://output', 'w');
@@ -216,39 +186,6 @@ class DashboardController extends Controller
 
     private function filtered(Request $request)
     {
-        $request->validate([
-            'q' => 'nullable|string|max:255', 'source' => 'nullable|string|max:255',
-            'sentiment' => 'nullable|in:positif,netral,negatif', 'from' => 'nullable|date', 'to' => 'nullable|date|after_or_equal:from',
-            'category_id' => 'nullable|integer', 'region_id' => 'nullable|integer', 'agency_id' => 'nullable|integer',
-            'verification_status' => 'nullable|in:pending,verified',
-        ]);
-        $query = NewsItem::with(['category', 'region', 'agency']);
-        foreach (['category_id', 'region_id', 'agency_id', 'verification_status'] as $field) {
-            if ($request->filled($field)) $query->where($field, $request->input($field));
-        }
-
-        if ($request->filled('q')) {
-            $query->where('title', 'like', '%' . $request->string('q') . '%');
-        }
-        if ($request->filled('sentiment')) {
-            $query->where('sentiment', $request->string('sentiment'));
-        }
-        if ($request->filled('source')) {
-            $query->where('source', $request->string('source'));
-        }
-        if ($request->boolean('urgent_only')) {
-            $query->where('is_urgent', true);
-        }
-        if ($request->filled('archived')) {
-            $query->where('archived', $request->input('archived') === '1');
-        }
-        if ($request->filled('from')) {
-            $query->whereDate('published_at', '>=', $request->date('from'));
-        }
-        if ($request->filled('to')) {
-            $query->whereDate('published_at', '<=', $request->date('to'));
-        }
-
-        return $query;
+        return NewsFilters::query($request);
     }
 }

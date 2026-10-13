@@ -5,10 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Monitoring Berita Pemprov Sumut')</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         :root {
             --ink: #2B0A0F;
@@ -18,8 +15,8 @@
             --amber: #C9A227;
             --wire: #EFE7DA;
         }
-        body { font-family: 'Inter', sans-serif; background: var(--paper); }
-        .font-display { font-family: 'Fraunces', serif; }
+        body { font-family: 'Inter Variable', sans-serif; background: var(--paper); }
+        .font-display { font-family: 'Fraunces Variable', serif; }
         .font-mono { font-family: 'IBM Plex Mono', monospace; }
 
         /* Signature element: live wire ticker */
@@ -70,7 +67,7 @@
     <div class="md:flex">
         {{-- Sidebar (desktop) --}}
         @auth
-        <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 md:top-[29px] bg-[var(--navy)] text-white">
+        <aside class="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 {{ ($tickerItems ?? collect())->isNotEmpty() ? 'md:top-[29px]' : '' }} bg-[var(--navy)] text-white overflow-y-auto">
             <div class="p-6 border-b border-white/10">
                 <div>
                     <img src="{{ asset('images/logo.png') }}" class="w-11 h-11 rounded-xl object-cover mb-3">
@@ -143,6 +140,7 @@
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 }
             });
+            if (!res.ok) throw new Error('Gagal menyimpan perubahan arsip.');
             await res.json();
             if (btn.dataset.redirect) {
                 window.location.reload();
@@ -156,6 +154,7 @@
             }
         } catch (err) {
             btn.disabled = false;
+            window.alert('Perubahan arsip belum tersimpan. Muat ulang halaman dan coba lagi.');
         }
     });
     </script>

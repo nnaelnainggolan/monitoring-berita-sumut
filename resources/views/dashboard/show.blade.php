@@ -59,7 +59,7 @@
     </div>
 </div>
 
-<div class="panel mt-5"><h2 class="font-display text-xl mb-3">Klasifikasi & verifikasi</h2>
+<div class="panel mt-5"><p class="eyebrow">BERITA #{{ $item->id }}</p><h2 class="font-display text-xl mb-3">Klasifikasi & verifikasi</h2>
 <p class="text-sm">Kategori: {{ $item->category?->name ?? 'Belum ditentukan' }} · Wilayah: {{ $item->region?->name ?? 'Belum ditentukan' }} · OPD: {{ $item->agency?->name ?? 'Belum ditentukan' }}</p>
 <p class="text-sm mt-2">{{ $item->verification_status === 'verified' ? 'Terverifikasi' : 'Perlu diperiksa' }}@if($item->verified_at) oleh {{ $item->verifier?->name }} · {{ $item->verified_at->format('d/m/Y H:i') }} WIB @endif</p>
 </div>

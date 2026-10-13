@@ -48,6 +48,7 @@ return new class extends Migration
             foreach (['category_id', 'region_id', 'agency_id', 'verified_by'] as $column) {
                 $table->dropConstrainedForeignId($column);
             }
+            $table->dropIndex(['verification_status']);
             $table->dropColumn(['verification_status', 'review_version', 'ai_payload', 'verified_at']);
         });
         Schema::dropIfExists('taxonomies');

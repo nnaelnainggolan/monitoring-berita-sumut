@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Issue;
@@ -14,11 +15,14 @@ class NotificationController extends Controller
             'preferences' => $request->user()->notification_preferences ?? [],
             'taxonomies' => Taxonomy::where('is_active', true)->orderBy('name')->get()->groupBy('kind')]);
     }
+
     public function read(Request $request, string $id)
     {
         $request->user()->notifications()->findOrFail($id)->markAsRead();
+
         return back();
     }
+
     public function preferences(Request $request)
     {
         $request->merge(['email' => $request->boolean('email'), 'watch' => $request->boolean('watch'),
@@ -29,6 +33,7 @@ class NotificationController extends Controller
             'categories.*' => ['integer', Rule::exists('taxonomies', 'id')->where('kind', 'category')],
             'regions.*' => ['integer', Rule::exists('taxonomies', 'id')->where('kind', 'region')]]);
         $request->user()->forceFill(['notification_preferences' => $data])->save();
+
         return back()->with('status', 'Preferensi notifikasi disimpan.');
     }
 }

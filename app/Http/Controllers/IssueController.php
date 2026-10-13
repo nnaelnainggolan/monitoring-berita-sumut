@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Issue;
 use App\Models\NewsItem;
 use App\Models\Taxonomy;
 use App\Models\User;
+use App\Services\ArticleSuggestions;
 use App\Services\IssueNotifier;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,10 +21,21 @@ class IssueController extends Controller
         $filters = $request->validate(['status' => ['nullable', Rule::in(array_keys(Issue::STATUSES))],
             'priority' => ['nullable', Rule::in(array_keys(Issue::PRIORITIES))], 'q' => 'nullable|string|max:255']);
         $query = Issue::with(['assignee', 'region'])->withCount('news')->latest();
-        foreach (['status', 'priority'] as $field) if (! empty($filters[$field])) $query->where($field, $filters[$field]);
-        if (! empty($filters['q'])) $query->where('title', 'like', '%'.$filters['q'].'%');
-        if ($request->boolean('mine')) $query->where('assigned_to', $request->user()->id);
-        if ($request->boolean('overdue')) $query->where('status', '!=', 'resolved')->where('due_at', '<', now());
+        foreach (['status', 'priority'] as $field) {
+            if (! empty($filters[$field])) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+        if (! empty($filters['q'])) {
+            $query->where('title', 'like', '%'.$filters['q'].'%');
+        }
+        if ($request->boolean('mine')) {
+            $query->where('assigned_to', $request->user()->id);
+        }
+        if ($request->boolean('overdue')) {
+            $query->where('status', '!=', 'resolved')->where('due_at', '<', now());
+        }
+
         return view('issues.index', ['issues' => $query->paginate(15)->withQueryString(),
             'counts' => Issue::selectRaw('status, COUNT(*) as total')->groupBy('status')->pluck('total', 'status')]);
     }
@@ -32,6 +45,7 @@ class IssueController extends Controller
         Gate::authorize('create', Issue::class);
         $request->validate(['news_id' => 'nullable|integer|exists:news_items,id']);
         $news = $request->filled('news_id') ? NewsItem::findOrFail($request->integer('news_id')) : null;
+
         return view('issues.create', $this->options() + ['news' => $news]);
     }
 
@@ -49,14 +63,17 @@ class IssueController extends Controller
             }
             $issue->activities()->create(['user_id' => $request->user()->id, 'kind' => 'created', 'note' => 'Isu dibuat.', 'changes' => $issue->only(array_keys($this->rules()))]);
             $notifier->send($issue, 'Isu baru: '.$issue->title, $request->user()->id, true);
+
             return $issue;
         });
+
         return redirect()->route('issues.show', $issue)->with('status', 'Isu berhasil dibuat.');
     }
 
     public function show(Issue $issue)
     {
-        return view('issues.show', $this->options() + ['issue' => $issue->load(['assignee', 'creator', 'category', 'region', 'agency', 'news', 'activities.user'])]);
+        return view('issues.show', $this->options() + ['issue' => $issue->load(['assignee', 'creator', 'category', 'region', 'agency', 'news', 'activities.user']),
+            'suggestions' => app(ArticleSuggestions::class)->forIssue($issue)]);
     }
 
     public function update(Request $request, Issue $issue, IssueNotifier $notifier)
@@ -81,12 +98,15 @@ class IssueController extends Controller
             if ($next === 'in_progress' && ! $issue->assigned_to) {
                 throw ValidationException::withMessages(['assigned_to' => 'Tentukan penanggung jawab sebelum menindaklanjuti isu.']);
             }
-            if ($next !== $before['status']) $issue->resolved_at = $next === 'resolved' ? now() : null;
+            if ($next !== $before['status']) {
+                $issue->resolved_at = $next === 'resolved' ? now() : null;
+            }
             $issue->version++;
             $issue->save();
             $issue->activities()->create(['user_id' => $request->user()->id, 'kind' => 'updated', 'note' => $data['note'], 'changes' => ['before' => $before, 'after' => $issue->only($fields)]]);
             $notifier->send($issue, $data['note'].' · Status: '.Issue::STATUSES[$issue->status], $request->user()->id);
         });
+
         return back()->with('status', 'Perkembangan isu disimpan.');
     }
 
@@ -96,6 +116,7 @@ class IssueController extends Controller
         $data = $request->validate(['note' => 'required|string|max:5000']);
         $issue->activities()->create(['user_id' => $request->user()->id, 'kind' => 'comment', 'note' => $data['note']]);
         $notifier->send($issue, $data['note'], $request->user()->id);
+
         return back()->with('status', 'Catatan ditambahkan.');
     }
 
@@ -104,7 +125,10 @@ class IssueController extends Controller
         $rules = ['title' => 'required|string|max:255', 'summary' => 'required|string|max:10000',
             'priority' => ['required', Rule::in(array_keys(Issue::PRIORITIES))], 'due_at' => 'nullable|date',
             'assigned_to' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)->whereIn('role', ['officer', 'analyst', 'admin'])]];
-        foreach (Taxonomy::KINDS as $kind => $label) $rules[$kind.'_id'] = ['nullable', 'integer', Rule::exists('taxonomies', 'id')->where('kind', $kind)];
+        foreach (Taxonomy::KINDS as $kind => $label) {
+            $rules[$kind.'_id'] = ['nullable', 'integer', Rule::exists('taxonomies', 'id')->where('kind', $kind)];
+        }
+
         return $rules;
     }
 

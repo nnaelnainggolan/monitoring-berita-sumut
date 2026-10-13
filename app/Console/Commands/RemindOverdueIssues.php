@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Console\Commands;
 
 use App\Models\Issue;
@@ -9,7 +10,9 @@ use Illuminate\Support\Facades\DB;
 class RemindOverdueIssues extends Command
 {
     protected $signature = 'issues:remind';
+
     protected $description = 'Mengantrekan pengingat isu terlambat, maksimal sekali per isu per hari';
+
     public function handle(IssueNotifier $notifier): int
     {
         $count = 0;
@@ -25,6 +28,7 @@ class RemindOverdueIssues extends Command
             }
         });
         $this->info($count.' pengingat diantrekan.');
+
         return self::SUCCESS;
     }
 }

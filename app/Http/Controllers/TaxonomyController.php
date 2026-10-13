@@ -20,6 +20,7 @@ class TaxonomyController extends Controller
             'name' => ['required', 'string', 'max:150', Rule::unique('taxonomies')->where('kind', $request->input('kind'))],
         ]);
         Taxonomy::create($data);
+
         return back()->with('status', 'Data klasifikasi ditambahkan.');
     }
 
@@ -30,6 +31,7 @@ class TaxonomyController extends Controller
             'is_active' => 'required|boolean',
         ]);
         $taxonomy->update($data);
+
         return back()->with('status', 'Data klasifikasi diperbarui.');
     }
 }

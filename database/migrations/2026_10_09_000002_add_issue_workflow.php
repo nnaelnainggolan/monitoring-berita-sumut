@@ -1,4 +1,5 @@
 <?php
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -49,6 +50,7 @@ return new class extends Migration
             $table->unique(['issue_id', 'reminder_date']);
         });
     }
+
     public function down(): void
     {
         Schema::dropIfExists('issue_reminders');

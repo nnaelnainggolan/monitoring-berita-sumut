@@ -62,6 +62,8 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+if (typeof Chart === 'undefined') return;
 new Chart(document.getElementById('sourceChart'), {
     type: 'bar',
     data: {
@@ -81,6 +83,7 @@ new Chart(document.getElementById('sourceChart'), {
         }
     }
 });
+}, { once: true });
 </script>
 @endif
 

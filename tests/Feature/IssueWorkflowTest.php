@@ -1,12 +1,16 @@
 <?php
+
 namespace Tests\Feature;
 
 use App\Models\Issue;
 use App\Models\NewsItem;
+use App\Models\Taxonomy;
 use App\Models\User;
 use App\Notifications\IssueNotification;
+use App\Services\IssueNotifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class IssueWorkflowTest extends TestCase
@@ -27,7 +31,7 @@ class IssueWorkflowTest extends TestCase
         $news = NewsItem::create(['title' => 'Sumber', 'link' => 'https://example.com/1', 'sentiment' => 'negatif']);
         $this->actingAs($analyst)->get('/issues/create?news_id='.$news->id)->assertOk();
         $this->post('/issues', ['title' => 'Isu baru', 'summary' => 'Ringkasan isu', 'priority' => 'high',
-            'assigned_to' => (string)$officer->id, 'news_id' => $news->id])->assertRedirect();
+            'assigned_to' => (string) $officer->id, 'news_id' => $news->id])->assertRedirect();
         $issue = Issue::firstOrFail();
         $this->assertEquals($issue->id, $news->fresh()->issue_id);
         Notification::assertSentTo($officer, IssueNotification::class);
@@ -89,11 +93,29 @@ class IssueWorkflowTest extends TestCase
     {
         $user = User::factory()->create();
         $other = User::factory()->create();
-        $notification = $other->notifications()->create(['id' => (string)\Illuminate\Support\Str::uuid(), 'type' => IssueNotification::class,
+        $notification = $other->notifications()->create(['id' => (string) Str::uuid(), 'type' => IssueNotification::class,
             'data' => ['issue_id' => 1, 'title' => 'Private', 'message' => 'Test']]);
         $this->actingAs($user)->get('/notifications')->assertOk();
         $this->post('/notifications/'.$notification->id.'/read')->assertNotFound();
         $this->put('/notifications/preferences', ['email' => 1, 'watch' => 1, 'min_priority' => 'critical'])->assertRedirect();
         $this->assertTrue($user->fresh()->notification_preferences['email']);
+    }
+
+    public function test_watchers_receive_only_matching_priority_and_classification(): void
+    {
+        Notification::fake();
+        $analyst = User::factory()->create(['role' => 'analyst']);
+        $officer = User::factory()->create(['role' => 'officer']);
+        $region = Taxonomy::create(['kind' => 'region', 'name' => 'Medan']);
+        $watcher = User::factory()->create();
+        $watcher->forceFill(['notification_preferences' => ['watch' => true, 'min_priority' => 'high', 'regions' => [$region->id]]])->save();
+        $nonmatching = User::factory()->create();
+        $nonmatching->forceFill(['notification_preferences' => ['watch' => true, 'min_priority' => 'critical']])->save();
+        $issue = $this->makeIssue($analyst, $officer);
+        $issue->update(['region_id' => $region->id]);
+        app(IssueNotifier::class)->send($issue, 'Isu baru', $analyst->id, true);
+        Notification::assertSentTo($watcher, IssueNotification::class);
+        Notification::assertNotSentTo($nonmatching, IssueNotification::class);
+        Notification::assertSentTo($officer, IssueNotification::class);
     }
 }
