@@ -20,6 +20,11 @@ Route::middleware('can:administer')->prefix('admin')->name('admin.')->group(func
     Route::post('taxonomies', [\App\Http\Controllers\TaxonomyController::class, 'store'])->name('taxonomies.store');
     Route::put('taxonomies/{taxonomy}', [\App\Http\Controllers\TaxonomyController::class, 'update'])->name('taxonomies.update');
 });
+Route::resource('issues', \App\Http\Controllers\IssueController::class)->only(['index', 'create', 'store', 'show', 'update']);
+Route::post('/issues/{issue}/comments', [\App\Http\Controllers\IssueController::class, 'comment'])->name('issues.comment');
+Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])->name('notifications.index');
+Route::post('/notifications/{id}/read', [\App\Http\Controllers\NotificationController::class, 'read'])->name('notifications.read');
+Route::put('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])->name('notifications.preferences');
 Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'destroy'])->name('logout');
 });
 Route::middleware('guest')->group(function () {

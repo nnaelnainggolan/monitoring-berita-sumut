@@ -53,6 +53,8 @@
             {{ $item->archived ? '↩ Batalkan arsip' : '🗄 Arsipkan berita ini' }}
         </button>
         @endcan
+        @if($item->issue_id)<a class="btn-secondary" href="{{ route('issues.show', $item->issue_id) }}">Lihat isu terkait</a>
+        @else @can('create', \App\Models\Issue::class)<a class="btn-secondary" href="{{ route('issues.create', ['news_id' => $item->id]) }}">Buat isu dari berita</a>@endcan @endif
         @can('review-news')<a class="btn" href="{{ route('news.review', $item) }}">Periksa analisis</a>@endcan
     </div>
 </div>

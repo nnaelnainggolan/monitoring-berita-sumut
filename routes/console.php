@@ -6,3 +6,5 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+\Illuminate\Support\Facades\Schedule::command('issues:remind')->hourly()->between('08:00', '18:00')->withoutOverlapping();
