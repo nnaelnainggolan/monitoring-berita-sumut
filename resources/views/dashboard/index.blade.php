@@ -1,276 +1,209 @@
 @extends('layouts.app')
 
 @section('content')
-
-{{-- Hero: masthead + banner image slot --}}
-<div class="grid md:grid-cols-[1.3fr_1fr] gap-5 mb-8 items-stretch">
-    <div class="relative bg-[var(--navy)] text-white rounded-2xl p-7 flex flex-col justify-between overflow-hidden">
-
-        {{-- Mini kalender bulan berjalan, pojok kanan atas --}}
-        @php
-            $today = now();
-            $firstDay = $today->copy()->startOfMonth();
-            $startOffset = $firstDay->dayOfWeekIso % 7; // 0 = Minggu
-            $daysInMonth = $today->daysInMonth;
-            $cells = collect(array_fill(0, $startOffset, null))
-                ->concat(range(1, $daysInMonth));
-        @endphp
-        <div class="hidden sm:block absolute top-4 right-4 w-[190px] bg-white/10 rounded-lg p-3 font-mono">
-            <p class="text-[11px] text-center text-[var(--amber)] mb-2 tracking-wide">{{ $today->translatedFormat('F Y') }}</p>
-            <div class="grid grid-cols-7 gap-y-1 text-center text-[10px] text-slate-300">
-                @foreach(['M','S','S','R','K','J','S'] as $d)
-                    <span class="text-[9px] text-slate-400">{{ $d }}</span>
-                @endforeach
-                @foreach($cells as $day)
-                    @if(is_null($day))
-                        <span></span>
-                    @elseif($day === $today->day)
-                        <span class="bg-[var(--amber)] text-[var(--ink)] rounded-full w-6 h-6 flex items-center justify-center mx-auto font-semibold">{{ $day }}</span>
-                    @else
-                        <span class="text-slate-300">{{ $day }}</span>
-                    @endif
-                @endforeach
-            </div>
-        </div>
-
-        <div>
-            <p class="font-mono text-[11px] tracking-[0.15em] text-[var(--amber)] mb-2">EDISI HARI INI &middot; {{ now()->translatedFormat('d F Y') }}</p>
-            <h1 class="font-display text-3xl md:text-[34px] font-semibold leading-[1.15] max-w-[70%] sm:max-w-[55%]">
-                Ruang Pantau Berita<br>Pemerintah Provinsi<br>Sumatera Utara
-            </h1>
-        </div>
-        <p class="text-sm text-slate-300 mt-6 max-w-md">
-            Setiap berita dikumpulkan, dinilai sentimennya oleh AI, lalu ditandai otomatis bila memerlukan perhatian segera.
-        </p>
-    </div>
-
-    {{-- Banner image slot — ganti dengan foto Kantor Gubernur / peta Sumut / dokumentasi kegiatan --}}
-    <div>
-        <img src="{{ asset('images/hero.png') }}" class="rounded-2xl w-full h-full object-cover">
+<div class="dashboard-heading">
+    <div><h1>Ruang pantau berita</h1><p>Pantau pemberitaan, pahami sentimen, dan tentukan tindak lanjut.</p></div>
+    <div class="dashboard-actions">
+        <button id="enableNotif" type="button" class="btn-secondary" aria-label="Aktifkan notifikasi berita mendesak"><x-icon name="bell"/><span data-button-label>Notifikasi</span></button>
+        @can('review-news')<button id="runWorkflow" type="button" class="btn"><x-icon name="refresh"/><span data-button-label>Cari berita terbaru</span></button>@endcan
     </div>
 </div>
-
-{{-- Tombol aktifkan notifikasi & tombol jalankan pencarian berita terbaru --}}
-<div class="mb-6 flex flex-wrap items-center gap-2">
-    <button id="enableNotif" type="button"
-            class="text-sm px-4 py-2 rounded-lg border border-[var(--navy)]/20 bg-white hover:bg-[var(--navy)]/5 transition-colors">
-        🔔 Aktifkan notifikasi berita mendesak
-    </button>
-    <span id="notifStatus" class="text-xs text-slate-400 ml-2"></span>
-
-    @can('review-news')
-    <button id="runWorkflow" type="button"
-            class="text-sm px-4 py-2 rounded-lg bg-[var(--amber)] text-[var(--ink)] font-medium hover:brightness-95 transition disabled:opacity-60 disabled:cursor-not-allowed">
-        🔄 Cari Berita Terbaru
-    </button>
-    <span id="runWorkflowStatus" class="text-xs text-slate-400"></span>
-    @endcan
+<div class="action-feedback" role="status"><span id="notifStatus"></span>@can('review-news')<span id="runWorkflowStatus"></span>@endcan</div>
+<section class="overview-banner" aria-label="Pemantauan Sumatera Utara">
+    <img class="banner-photo" src="{{ asset('images/hero.png') }}" alt="" fetchpriority="high">
+    <div class="banner-content"><span class="banner-eyebrow"><x-icon name="pin"/>Pemerintah Provinsi Sumatera Utara</span><h2>Informasi terkini, keputusan lebih terarah.</h2><p>Satu ruang untuk memantau berita dan isu yang membutuhkan perhatian.</p></div>
+    <span class="banner-caption">Sumatera Utara</span>
+</section>
+@if($tickerItems->isNotEmpty())
+<div class="news-wire" aria-label="Sorotan berita terbaru">
+    <span class="news-wire-label">Sorotan</span>
+    <div class="news-wire-window"><div class="ticker-track"><div class="ticker-group">@foreach($tickerItems as $headline)<span>{{ $headline }}</span>@endforeach</div><div class="ticker-group" aria-hidden="true">@foreach($tickerItems as $headline)<span>{{ $headline }}</span>@endforeach</div></div></div>
+    <button type="button" class="ticker-toggle" aria-label="Jeda sorotan berita" aria-pressed="false">Jeda</button>
 </div>
-
-{{-- Region yang di-refresh via AJAX --}}
-<div id="dashboard-results">
-    @include('dashboard.partials.results')
-</div>
+@endif
+<div id="dashboard-results">@include('dashboard.partials.results')</div>
+<p id="results-status" class="sr-only" role="status"></p>
 
 <script>
 (function () {
     let chartInstance = null;
     let weeklyChartInstance = null;
-
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    function destroyCharts() {
+        chartInstance?.destroy();
+        weeklyChartInstance?.destroy();
+        chartInstance = weeklyChartInstance = null;
+    }
+    function chartOptions() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: reducedMotion.matches ? false : { duration: 400 },
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: { position: 'bottom', align: 'start', labels: { color: '#65748a', boxWidth: 7, boxHeight: 7, usePointStyle: true, padding: 20, font: { size: 10, family: 'Inter Variable, sans-serif' } } },
+                tooltip: { backgroundColor: '#253247', padding: 11, cornerRadius: 7, titleFont: { size: 11 }, bodyFont: { size: 11 } }
+            },
+            scales: {
+                y: { beginAtZero: true, border: { display: false }, ticks: { precision: 0, maxTicksLimit: 5, color: '#8794a6', padding: 8, font: { size: 10 } }, grid: { color: '#edf0f5', drawTicks: false } },
+                x: { border: { display: false }, ticks: { color: '#8794a6', maxRotation: 0, maxTicksLimit: 7, padding: 9, font: { size: 10 } }, grid: { display: false } }
+            }
+        };
+    }
     function initChart() {
         if (typeof Chart === 'undefined') return;
+        destroyCharts();
         const canvas = document.getElementById('trendChart');
-        if (canvas) {
-            if (chartInstance) { chartInstance.destroy(); }
-            chartInstance = new Chart(canvas, {
-                type: 'line',
-                data: {
-                    labels: JSON.parse(canvas.dataset.labels),
-                    datasets: JSON.parse(canvas.dataset.datasets)
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, usePointStyle: true } } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#F0E9DC' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        }
-
+        if (canvas) chartInstance = new Chart(canvas, {
+            type: 'line',
+            data: { labels: JSON.parse(canvas.dataset.labels), datasets: JSON.parse(canvas.dataset.datasets) },
+            options: chartOptions()
+        });
         const weeklyCanvas = document.getElementById('weeklyChart');
-        if (weeklyCanvas) {
-            if (weeklyChartInstance) { weeklyChartInstance.destroy(); }
-            weeklyChartInstance = new Chart(weeklyCanvas, {
-                type: 'bar',
-                data: {
-                    labels: JSON.parse(weeklyCanvas.dataset.labels),
-                    datasets: [
-                        { label: 'Minggu Ini', data: JSON.parse(weeklyCanvas.dataset.this), backgroundColor: '#7A1B24', borderRadius: 4 },
-                        { label: 'Minggu Lalu', data: JSON.parse(weeklyCanvas.dataset.last), backgroundColor: '#C9A227', borderRadius: 4 }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { position: 'bottom', labels: { boxWidth: 8, usePointStyle: true } } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#F0E9DC' } },
-                        x: { grid: { display: false } }
-                    }
-                }
-            });
-        }
+        if (weeklyCanvas) weeklyChartInstance = new Chart(weeklyCanvas, {
+            type: 'bar',
+            data: {
+                labels: JSON.parse(weeklyCanvas.dataset.labels),
+                datasets: [
+                    { label: 'Minggu ini', data: JSON.parse(weeklyCanvas.dataset.this), backgroundColor: '#98485d', borderRadius: 4, maxBarThickness: 14 },
+                    { label: 'Minggu lalu', data: JSON.parse(weeklyCanvas.dataset.last), backgroundColor: '#dfc49d', borderRadius: 4, maxBarThickness: 14 }
+                ]
+            },
+            options: chartOptions()
+        });
     }
 
-    const results = document.getElementById('dashboard-results');
+    const tickerToggle = document.querySelector('.ticker-toggle');
+    tickerToggle?.addEventListener('click', () => {
+        const paused = tickerToggle.getAttribute('aria-pressed') !== 'true';
+        tickerToggle.setAttribute('aria-pressed', String(paused));
+        tickerToggle.setAttribute('aria-label', paused ? 'Lanjutkan sorotan berita' : 'Jeda sorotan berita');
+        tickerToggle.textContent = paused ? 'Lanjut' : 'Jeda';
+        document.querySelector('.ticker-track').style.animationPlayState = paused ? 'paused' : '';
+    });
 
-    async function loadUrl(url, push = true) {
-        results.style.opacity = 0.5;
+    const results = document.getElementById('dashboard-results');
+    let activeRequest;
+    async function loadUrl(url, push = true, focusTarget = null) {
+        activeRequest?.abort();
+        const request = activeRequest = new AbortController();
+        const advancedOpen = results.querySelector('.advanced-filters')?.open;
+        results.style.opacity = '0.55';
+        results.setAttribute('aria-busy', 'true');
         try {
-            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, signal: request.signal });
             if (res.redirected) { window.location.href = res.url; return; }
             if (!res.ok) { window.location.href = url; return; }
             const html = await res.text();
+            if (request.signal.aborted) return;
+            destroyCharts();
             results.innerHTML = html;
+            if (advancedOpen && focusTarget === '#filterForm button[type="submit"]') results.querySelector('.advanced-filters').open = true;
             initChart();
             if (push) history.pushState({ dashboardAjax: true }, '', url);
-        } catch (e) {
-            window.location.href = url; // fallback kalau fetch gagal
+            if (focusTarget) results.querySelector(focusTarget)?.focus({ preventScroll: true });
+            if (focusTarget === '#news-title') results.querySelector('.news-panel').scrollIntoView({ block: 'start' });
+            document.getElementById('results-status').textContent = results.querySelector('.result-count')?.textContent.trim() + ' ditampilkan sesuai filter.';
+        } catch (error) {
+            if (error.name !== 'AbortError') window.location.href = url;
         } finally {
-            results.style.opacity = 1;
+            if (activeRequest === request) {
+                results.style.opacity = '1';
+                results.removeAttribute('aria-busy');
+            }
         }
     }
-
-    // Intercept submit form filter
-    document.addEventListener('submit', function (e) {
-        if (e.target.id !== 'filterForm') return;
-        e.preventDefault();
-        const params = new URLSearchParams(new FormData(e.target));
-        loadUrl(e.target.action + '?' + params.toString());
+    document.addEventListener('submit', function (event) {
+        if (event.target.id !== 'filterForm') return;
+        event.preventDefault();
+        const params = new URLSearchParams(new FormData(event.target));
+        for (const [key, value] of [...params]) if (!value) params.delete(key);
+        loadUrl(event.target.action + '?' + params.toString(), true, '#filterForm button[type="submit"]');
     });
-
-    // Intercept klik link di dalam region hasil (stat card, reset, pagination) — kecuali data-no-ajax
-    document.addEventListener('click', function (e) {
-        const link = e.target.closest('a');
-        if (!link || !results.contains(link)) return;
-        if (link.hasAttribute('data-no-ajax')) return;
-        if (link.target === '_blank') return;
-        e.preventDefault();
-        loadUrl(link.href);
+    document.addEventListener('click', function (event) {
+        const link = event.target.closest('a');
+        if (!link || !results.contains(link) || link.hasAttribute('data-no-ajax') || link.target === '_blank') return;
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        if (new URL(link.href).origin !== window.location.origin) return;
+        event.preventDefault();
+        loadUrl(link.href, true, link.closest('.news-pagination') ? '#news-title' : null);
     });
-
-    // Dukung tombol back/forward browser
-    window.addEventListener('popstate', function () {
-        loadUrl(window.location.href, false);
-    });
-
-    // Toggle arsip (tabel di dashboard / tombol di halaman detail)
+    window.addEventListener('popstate', () => loadUrl(window.location.href, false));
     initChart();
     document.addEventListener('DOMContentLoaded', initChart, { once: true });
     window.__reloadDashboardResults = () => loadUrl(window.location.href, false);
 
-    // ===== Notifikasi browser untuk berita mendesak =====
     const NOTIF_URL = @json(route('dashboard.check-urgent'));
     const notifBtn = document.getElementById('enableNotif');
     const notifStatus = document.getElementById('notifStatus');
-    let lastSeenId = parseInt(localStorage.getItem('lastSeenUrgentId') || '{{ $latestId ?? 0 }}', 10);
-
+    let lastSeenId = {{ $latestId ?? 0 }};
+    try { lastSeenId = Number(localStorage.getItem('lastSeenUrgentId')) || lastSeenId; } catch (_) {}
     function updateNotifStatus() {
         if (!('Notification' in window)) {
-            notifStatus.textContent = 'Browser tidak mendukung notifikasi';
+            notifStatus.textContent = 'Browser ini tidak mendukung notifikasi.';
             notifBtn.disabled = true;
             return;
         }
         if (Notification.permission === 'granted') {
-            notifStatus.textContent = 'Notifikasi aktif';
-            notifBtn.textContent = '🔔 Notifikasi aktif';
+            notifBtn.querySelector('[data-button-label]').textContent = 'Notifikasi aktif';
+            notifBtn.setAttribute('aria-label', 'Notifikasi berita mendesak aktif');
         } else if (Notification.permission === 'denied') {
-            notifStatus.textContent = 'Notifikasi diblokir di pengaturan browser';
+            notifStatus.textContent = 'Izinkan notifikasi melalui pengaturan browser.';
         }
     }
-
-    notifBtn?.addEventListener('click', async function () {
+    notifBtn.addEventListener('click', async function () {
         if (!('Notification' in window)) return;
-        const perm = await Notification.requestPermission();
-        updateNotifStatus();
-        if (perm === 'granted') {
-            new Notification('Notifikasi aktif', { body: 'Kamu akan diberi tahu saat ada berita mendesak baru.' });
-        }
+        try {
+            const permission = await Notification.requestPermission();
+            updateNotifStatus();
+            if (permission === 'granted') new Notification('Notifikasi aktif', { body: 'Anda akan diberi tahu saat ada berita mendesak baru.' });
+        } catch (_) { notifStatus.textContent = 'Notifikasi belum dapat diaktifkan pada browser ini.'; }
     });
-
     updateNotifStatus();
 
-    // ===== Tombol "Cari Berita Terbaru" (memicu webhook n8n) =====
-    const RUN_WORKFLOW_URL = @json(route('dashboard.run-workflow'));
     const runBtn = document.getElementById('runWorkflow');
     const runStatus = document.getElementById('runWorkflowStatus');
-    const csrfToken = @json(csrf_token());
-
     runBtn?.addEventListener('click', async function () {
+        const label = runBtn.querySelector('[data-button-label]');
+        const originalLabel = label.textContent;
         runBtn.disabled = true;
-        const originalLabel = runBtn.textContent;
-        runBtn.textContent = '⏳ Memulai pencarian...';
+        label.textContent = 'Memulai pencarian...';
         runStatus.textContent = '';
-
+        const restoreButton = () => { runBtn.disabled = false; label.textContent = originalLabel; };
         try {
-            const res = await fetch(RUN_WORKFLOW_URL, {
-                method: 'POST',
-                headers: {
-                    'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
-                },
+            const res = await fetch(@json(route('dashboard.run-workflow')), {
+                method: 'POST', headers: { 'X-CSRF-TOKEN': @json(csrf_token()), 'Accept': 'application/json' }
             });
             const data = await res.json();
-
             if (res.ok) {
                 runStatus.textContent = data.message || 'Pencarian berita sedang diproses.';
-                runBtn.textContent = '✅ Sedang diproses...';
-
-                // Coba muat ulang hasil beberapa kali selama ~3 menit,
-                // karena analisis AI di n8n berjalan di background.
+                label.textContent = 'Sedang diproses...';
                 let attempts = 0;
                 const refreshInterval = setInterval(() => {
-                    attempts++;
                     window.__reloadDashboardResults();
-                    if (attempts >= 6) clearInterval(refreshInterval);
+                    if (++attempts >= 6) clearInterval(refreshInterval);
                 }, 30000);
-
-                // Aktifkan lagi tombolnya setelah 60 detik (hindari spam trigger)
-                setTimeout(() => {
-                    runBtn.disabled = false;
-                    runBtn.textContent = originalLabel;
-                }, 60000);
+                setTimeout(restoreButton, 60000);
             } else {
                 runStatus.textContent = data.message || 'Gagal memulai pencarian berita.';
-                runBtn.disabled = false;
-                runBtn.textContent = originalLabel;
+                restoreButton();
             }
-        } catch (e) {
-            runStatus.textContent = 'Gagal menghubungi server.';
-            runBtn.disabled = false;
-            runBtn.textContent = originalLabel;
-        }
+        } catch (_) { runStatus.textContent = 'Gagal menghubungi server.'; restoreButton(); }
     });
-
     async function pollUrgent() {
         if (!('Notification' in window) || Notification.permission !== 'granted') return;
         try {
             const res = await fetch(`${NOTIF_URL}?since_id=${lastSeenId}`);
+            if (!res.ok) return;
             const data = await res.json();
-            (data.items || []).forEach(item => {
-                new Notification('🚨 Berita Mendesak', {
-                    body: item.title + (item.source ? ' — ' + item.source : ''),
-                });
-            });
+            (data.items || []).forEach(item => new Notification('Berita mendesak', { body: item.title + (item.source ? ' — ' + item.source : '') }));
             if (data.latestId) {
                 lastSeenId = data.latestId;
-                localStorage.setItem('lastSeenUrgentId', lastSeenId);
+                try { localStorage.setItem('lastSeenUrgentId', lastSeenId); } catch (_) {}
             }
-        } catch (e) { /* diam saja kalau gagal, coba lagi di interval berikutnya */ }
+        } catch (_) { /* Coba lagi pada pemeriksaan berikutnya. */ }
     }
-
-    setInterval(pollUrgent, 30000); // cek tiap 30 detik
+    setInterval(pollUrgent, 30000);
 })();
 </script>
 @endsection

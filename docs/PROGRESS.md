@@ -32,6 +32,17 @@ Pengujian backend menggunakan PHP 8.5.11 dan SQLite terisolasi. Dependensi dikun
 
 Tampilan dashboard desktop serta halaman isu mobile diperiksa melalui screenshot. Halaman laporan dan isu diuji pada lebar 390 piksel tanpa overflow horizontal. Build produksi frontend berhasil.
 
+## Penyegaran dashboard — 13 Oktober 2026
+
+Navigasi dipindahkan ke sidebar dengan menu drawer pada ponsel. Palet marun, biru gelap, dan latar netral diterapkan bersama ukuran teks, ikon, jarak, serta kartu yang konsisten. Banner dipadatkan; ringkasan statistik dilengkapi persentase; grafik memakai tinggi tetap agar mudah dibandingkan. Filter lanjutan dapat dibuka sesuai kebutuhan, tabel berubah menjadi kartu pada ponsel, dan pagination berbahasa Indonesia mempertahankan filter aktif.
+
+Fungsi filter AJAX, tombol kembali/maju browser, arsip, ekspor CSV, dan pemulihan tombol pencarian ketika server menolak permintaan diuji di Chromium. Menu ponsel diuji dengan keyboard, Escape, klik backdrop, navigasi, dan pembatasan peran. Sorotan berita bisa dijeda dan menghormati preferensi pengurangan animasi.
+
+- PHPUnit: 27 tes, 162 assertion lulus; build Vite produksi berhasil.
+- Tampilan diperiksa pada lebar 320, 390, 768, 1024, 1366, dan 1440 piksel tanpa overflow halaman. Form lanjutan juga diperiksa pada layar sempit.
+- Grafik, halaman bersama, dan aset lokal berjalan tanpa error JavaScript dalam pengujian browser dengan data contoh terisolasi.
+- Pembaruan ini tidak menambahkan migration atau dependensi. Untuk instalasi yang sudah mengikuti branch kerja: `git pull --ff-only`, `npm run build`, lalu `php artisan optimize:clear`; muat ulang browser dengan Ctrl+F5.
+
 ## Yang perlu dihubungkan saat pemasangan
 
 - Sesuaikan `.env`, jalankan migration, lalu buat admin melalui perintah interaktif. Ikuti README untuk instalasi atau upgrade yang mempertahankan database lama.
